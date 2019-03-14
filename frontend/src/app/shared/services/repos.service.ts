@@ -3,17 +3,23 @@ import { RepoAttributes } from '../models/repo';
 import { ConfigService } from './config.service';
 
 import { Observable } from 'rxjs';
-import 'rxjs/add/operator/switchMap';
-import 'rxjs/add/operator/find';
-import 'rxjs/add/operator/map';
+
+
+import { catchError, filter, first, map, publishReplay, refCount, switchMap, tap, withLatestFrom } from 'rxjs/operators';
+
 
 import { Http, Response } from '@angular/http';
 
 @Injectable()
 export class ReposService {
+
+  hostname: string;
+
   constructor(
     private http: Http,
+    private config: ConfigService
   ) {
+    this.hostname = `/pp/v1/chartrepos`;
   }
 
   /**
@@ -22,9 +28,10 @@ export class ReposService {
    * @return {Observable} An observable that will an array with all repos
    */
   getRepos(): Observable<RepoAttributes[]> {
-    return this.http.get(`/assets/js/repos.json`)
-                  .map(this.extractData)
-                  .catch(this.handleError);
+    return this.http.get(`${this.hostname}`).pipe(
+                  map(this.extractData),
+                  catchError(this.handleError)
+    );
   }
 
   private extractData(res: Response) {

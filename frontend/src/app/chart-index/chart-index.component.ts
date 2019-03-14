@@ -1,7 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ChartsService } from '../shared/services/charts.service';
 import { Chart } from '../shared/models/chart';
-import { SeoService } from '../shared/services/seo.service';
 
 @Component({
   selector: 'app-chart-index',
@@ -15,12 +14,10 @@ export class ChartIndexComponent implements OnInit {
 
   constructor(
     private chartsService: ChartsService,
-    private seo: SeoService
   ) {}
 
   ngOnInit() {
 		this.loadCharts();
-    this.seo.setMetaTags('index');
   }
 
   loadCharts(): void {

@@ -3,7 +3,6 @@ import { ActivatedRoute, Params } from '@angular/router';
 import { ChartsService } from '../shared/services/charts.service';
 import { Chart } from '../shared/models/chart';
 import { ChartVersion } from '../shared/models/chart-version';
-import { SeoService } from '../shared/services/seo.service';
 import { ConfigService } from '../shared/services/config.service';
 
 @Component({
@@ -23,7 +22,6 @@ export class ChartDetailsComponent implements OnInit {
     private route: ActivatedRoute,
     private chartsService: ChartsService,
     private config: ConfigService,
-    private seo: SeoService
   ) {}
 
   ngOnInit() {
@@ -51,20 +49,7 @@ export class ChartDetailsComponent implements OnInit {
   /**
    * Update the metatags with the name and the description of the application.
    */
-  updateMetaTags(): void {
-    if (this.titleVersion.length > 0) {
-      this.seo.setMetaTags('chartDetailsWithVersion', {
-        name: this.chart.attributes.name,
-        description: this.chart.attributes.description,
-        version: this.titleVersion
-      });
-    } else {
-      this.seo.setMetaTags('chartDetails', {
-        name: this.chart.attributes.name,
-        description: this.chart.attributes.description
-      });
-    }
-  }
+  updateMetaTags(): void { }
 
   goToRepoUrl(): string {
     return `/charts/${this.chart.attributes.repo.name}`;

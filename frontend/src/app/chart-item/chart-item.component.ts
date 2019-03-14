@@ -24,11 +24,11 @@ export class ChartItemComponent implements OnInit {
   }
 
   goToDetailUrl(): string {
-    return `/charts/${this.chart.attributes.repo.name}/${this.chart.attributes
+    return `/monocular/charts/${this.chart.attributes.repo.name}/${this.chart.attributes
       .name}`;
   }
 
   goToRepoUrl(): string {
-    return `/charts/${this.chart.attributes.repo.name}`;
+    return `/monocular/charts/${this.chart.attributes.repo.name}`;
   }
 }

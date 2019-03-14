@@ -28,7 +28,23 @@ export class ChartDetailsReadmeComponent implements OnChanges {
     if (!this.currentVersion) return;
     this.chartsService.getChartReadme(this.currentVersion).subscribe(resp => {
       this.loading = false;
-      this.readmeContent = markdown(resp.text());
+
+      // Ensure links in the readme open in a new tab
+      const renderer = new markdown.Renderer();
+      renderer.link = function(href, title, text) {
+        const link = markdown.Renderer.prototype.link.call(this, href, title, text);
+        return link.replace('<a','<a target="_blank" ');
+      };
+      this.readmeContent = markdown(resp.text(), {
+        renderer: renderer
+      });
+    }, (error) => {
+      this.loading = false;
+      if (error.status === 404) {
+        this.readmeContent = '<h1>No Readme available for this chart</h1>';
+      } else {
+        this.readmeContent = '<h1>An error occrred retrieving Readme</h1>';
+      }
     });
   }
 }

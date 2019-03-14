@@ -1,15 +1,19 @@
 <app-panel class="chart-details-usage" [border]=true>
   <h1>Install</h1>
   <mat-tab-group>
+    <mat-tab label="UI">
+      <p>You can install using this Helm Chart in the console.</p>
+      <button class="chart-details-usage__install" color="primary" mat-button mat-raised-button
+      routerLink="/monocular/install/{{chart.id}}/{{currentVersion}}">Install</button>
+    </mat-tab>
+
     <mat-tab label="Helm CLI">
       <div *ngIf="showRepoInstructions" class="chart-details-usage__repository">
         <h2 class="chart-details-usage__label">Add {{ chart.attributes.repo.name }} repository</h2>
         <mat-form-field>
           <input matInput floatingPlaceholder=false [value]=repoAddInstructions>
         </mat-form-field>
-        <button mat-button ngxClipboard [cbContent]="repoAddInstructions" (cbOnSuccess)="showSnackBar()"
-          angulartics2On="click" angularticsEvent="RepositoryCopy" angularticsCategory="{{ chart.id }}"
-          [angularticsProperties]="{ label: currentVersion }">
+        <button mat-button angulartics2On="click" angularticsEvent="RepositoryCopy">
           <mat-icon svgIcon="content-copy"></mat-icon>
         </button>
       </div>
@@ -18,9 +22,7 @@
         <mat-form-field>
           <input matInput readonly floatingPlaceholder=false [value]=installInstructions>
         </mat-form-field>
-        <button mat-button ngxClipboard [cbContent]="installInstructions" (cbOnSuccess)="showSnackBar()"
-          angulartics2On="click" angularticsEvent="ChartInstallationCopy"
-          angularticsCategory="{{ chart.id }}" [angularticsProperties]="{ label: currentVersion }">
+        <button mat-button ngxClipboard angulartics2On="click">
           <mat-icon svgIcon="content-copy"></mat-icon>
         </button>
       </div>

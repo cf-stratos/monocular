@@ -4,9 +4,7 @@ import { ChartVersion } from '../models/chart-version';
 import { ConfigService } from './config.service';
 
 import { Observable } from 'rxjs';
-import 'rxjs/add/operator/switchMap';
-import 'rxjs/add/operator/find';
-import 'rxjs/add/operator/map';
+import { catchError, filter, first, map, publishReplay, refCount, switchMap, tap, withLatestFrom } from 'rxjs/operators';
 
 import { Http, Response } from '@angular/http';
 
@@ -22,6 +20,7 @@ export class ChartsService {
   ) {
     this.hostname = `${config.backendHostname}/chartsvc`;
     this.cacheCharts = {};
+    this.hostname = '/pp/v1/chartsvc';
   }
 
   /**
@@ -46,10 +45,11 @@ export class ChartsService {
         observer.next(this.cacheCharts[repo]);
       });
     } else {
-      return this.http.get(url)
-                    .map(this.extractData)
-                    .do((data) => this.storeCache(data, repo))
-                    .catch(this.handleError);
+      return this.http.get(url).pipe(
+        map(r => this.extractData(r)),
+        tap((data) => this.storeCache(data, repo)),
+        catchError(this.handleError)
+      );
     }
   }
 
@@ -62,15 +62,17 @@ export class ChartsService {
    */
   getChart(repo: string, chartName: string): Observable<Chart> {
     // Transform Observable<Chart[]> into Observable<Chart>[]
-    return this.http.get(`${this.hostname}/v1/charts/${repo}/${chartName}`)
-                  .map(this.extractData)
-                  .catch(this.handleError);
+    return this.http.get(`${this.hostname}/v1/charts/${repo}/${chartName}`).pipe(
+      map(this.extractData),
+      catchError(this.handleError)
+    );
   }
 
   /* TODO, use backend search API endpoint */
   searchCharts(query, repo?: string): Observable<Chart[]> {
     let re = new RegExp(query, 'i');
-    return this.getCharts(repo).map(charts => {
+    return this.getCharts(repo).pipe(
+      map(charts => {
       return charts.filter(chart => {
         return chart.attributes.name.match(re) ||
          chart.attributes.description.match(re) ||
@@ -80,6 +82,7 @@ export class ChartsService {
          this.arrayMatch(chart.attributes.sources, re)
       })
     })
+    );
   }
 
   arrayMatch(keywords: string[], re): boolean {
@@ -109,9 +112,10 @@ export class ChartsService {
    * @return {Observable} An observable containing an array of ChartVersions
    */
   getVersions(repo: string, chartName: string): Observable<ChartVersion[]> {
-    return this.http.get(`${this.hostname}/v1/charts/${repo}/${chartName}/versions`)
-      .map(this.extractData)
-      .catch(this.handleError);
+    return this.http.get(`${this.hostname}/v1/charts/${repo}/${chartName}/versions`).pipe(
+      map(m => this.extractData(m)),
+      catchError(this.handleError)
+    );
   }
 
   /**
@@ -122,9 +126,10 @@ export class ChartsService {
    * @return {Observable} An observable containing an array of ChartVersions
    */
   getVersion(repo: string, chartName: string, version: string): Observable<ChartVersion> {
-    return this.http.get(`${this.hostname}/v1/charts/${repo}/${chartName}/versions/${version}`)
-      .map(this.extractData)
-      .catch(this.handleError);
+    return this.http.get(`${this.hostname}/v1/charts/${repo}/${chartName}/versions/${version}`).pipe(
+      map(this.extractData),
+      catchError(this.handleError)
+    );
   }
 
   /**
@@ -136,7 +141,7 @@ export class ChartsService {
     if (chart.attributes.icon) {
       return `${this.hostname}${chart.attributes.icon}`
     } else {
-      return '/assets/images/placeholder.png';
+      return '/core/assets/custom/placeholder.png';
     }
   }
 

@@ -34,6 +34,9 @@ mat-tab-body {
     margin-left: 1em;
     min-width: auto;
     width: 4em;
+    &.chart-details-usage__install {
+      width: auto;
+    }
   }
 
   svg {

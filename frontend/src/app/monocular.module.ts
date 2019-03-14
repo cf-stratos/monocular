@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpModule } from '@angular/http';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { routing, appRoutingProviders } from './app.routing';
 
 /* Material library */
 import { MatIconModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatDialogModule, MatDialog, MatSnackBarModule, MatTabsModule, MatProgressBarModule, MatProgressSpinnerModule } from '@angular/material';
@@ -69,19 +69,21 @@ import { ListFiltersComponent } from './list-filters/list-filters.component';
     MatTabsModule,
     MatProgressBarModule,
     MatProgressSpinnerModule,
+
     FormsModule,
     HttpModule,
+    routing,
   ],
   providers: [
     MatDialog,
+    appRoutingProviders,
     ChartsService,
     ConfigService,
     MenuService,
     AuthService,
     ReposService,
   ],
-  entryComponents: [
-  ],
+  entryComponents: [],
   bootstrap: []
 })
 export class MonocularModule {}

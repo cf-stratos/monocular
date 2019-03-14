@@ -17,7 +17,7 @@ export class ChartDetailsVersionsComponent implements OnInit {
 
   goToVersionUrl(version: ChartVersion): string {
     let chart: ChartAttributes = version.relationships.chart.data
-    return `/charts/${chart.repo.name}/${chart.name}/${version.attributes.version}`;
+    return `/monocular/charts/${chart.repo.name}/${chart.name}/${version.attributes.version}`;
   }
 
   isSelected(version: ChartVersion): boolean {
