@@ -14,17 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package mongodb
 
 import (
 	"os"
+
+	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
 
 	"github.com/kubeapps/common/datastore"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-var syncCmd = &cobra.Command{
+var SyncCmd = &cobra.Command{
 	Use:   "sync [REPO NAME] [REPO URL]",
 	Short: "add a new chart repository, and resync its charts periodically",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -61,7 +63,7 @@ var syncCmd = &cobra.Command{
 		}
 
 		authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
-		if err = syncRepo(dbSession, args[0], args[1], authorizationHeader); err != nil {
+		if err = utils.SyncRepo(dbSession, args[0], args[1], authorizationHeader); err != nil {
 			logrus.Fatalf("Can't add chart repository to database: %v", err)
 		}
 

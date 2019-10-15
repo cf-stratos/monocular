@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package utils
 
 import (
 	"archive/tar"
@@ -33,6 +33,8 @@ import (
 	"path"
 	"strings"
 	"testing"
+
+	"github.com/cf-stratos/monocular/cmd/chart-repo/types"
 
 	"github.com/arschles/assert"
 	"github.com/disintegration/imaging"
@@ -110,7 +112,7 @@ func (h *goodIconClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 type goodTarballClient struct {
-	c          chart
+	c          types.Chart
 	skipReadme bool
 	skipValues bool
 }
@@ -134,7 +136,7 @@ func (h *goodTarballClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 type authenticatedTarballClient struct {
-	c chart
+	c types.Chart
 }
 
 func (h *authenticatedTarballClient) Do(req *http.Request) (*http.Response, error) {
@@ -166,7 +168,7 @@ func Test_syncURLInvalidity(t *testing.T) {
 	dbSession := mockstore.NewMockSession(&m)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := syncRepo(dbSession, "test", tt.repoURL, "")
+			err := SyncRepo(dbSession, "test", tt.repoURL, "")
 			assert.ExistsErr(t, err, tt.name)
 		})
 	}
@@ -175,14 +177,14 @@ func Test_syncURLInvalidity(t *testing.T) {
 func Test_fetchRepoIndex(t *testing.T) {
 	tests := []struct {
 		name string
-		r    repo
+		r    types.Repo
 	}{
-		{"valid HTTP URL", repo{URL: "http://my.examplerepo.com"}},
-		{"valid HTTPS URL", repo{URL: "https://my.examplerepo.com"}},
-		{"valid trailing URL", repo{URL: "https://my.examplerepo.com/"}},
-		{"valid subpath URL", repo{URL: "https://subpath.test/subpath/"}},
-		{"valid URL with trailing spaces", repo{URL: "https://subpath.test/subpath/  "}},
-		{"valid URL with leading spaces", repo{URL: "  https://subpath.test/subpath/"}},
+		{"valid HTTP URL", types.Repo{URL: "http://my.examplerepo.com"}},
+		{"valid HTTPS URL", types.Repo{URL: "https://my.examplerepo.com"}},
+		{"valid trailing URL", types.Repo{URL: "https://my.examplerepo.com/"}},
+		{"valid subpath URL", types.Repo{URL: "https://subpath.test/subpath/"}},
+		{"valid URL with trailing spaces", types.Repo{URL: "https://subpath.test/subpath/  "}},
+		{"valid URL with leading spaces", types.Repo{URL: "  https://subpath.test/subpath/"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -194,13 +196,13 @@ func Test_fetchRepoIndex(t *testing.T) {
 
 	t.Run("authenticated request", func(t *testing.T) {
 		netClient = &authenticatedHTTPClient{}
-		_, err := fetchRepoIndex(repo{URL: "https://my.examplerepo.com", AuthorizationHeader: "Bearer ThisSecretAccessTokenAuthenticatesTheClient"})
+		_, err := fetchRepoIndex(types.Repo{URL: "https://my.examplerepo.com", AuthorizationHeader: "Bearer ThisSecretAccessTokenAuthenticatesTheClient"})
 		assert.NoErr(t, err)
 	})
 
 	t.Run("failed request", func(t *testing.T) {
 		netClient = &badHTTPClient{}
-		_, err := fetchRepoIndex(repo{URL: "https://my.examplerepo.com"})
+		_, err := fetchRepoIndex(types.Repo{URL: "https://my.examplerepo.com"})
 		assert.ExistsErr(t, err, "failed request")
 	})
 }
@@ -225,7 +227,7 @@ func Test_fetchRepoIndexUserAgent(t *testing.T) {
 			}
 
 			if tt.userAgentComment != "" {
-				userAgentComment = tt.userAgentComment
+				UserAgentComment = tt.userAgentComment
 			}
 
 			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -237,7 +239,7 @@ func Test_fetchRepoIndexUserAgent(t *testing.T) {
 
 			netClient = server.Client()
 
-			_, err := fetchRepoIndex(repo{URL: server.URL})
+			_, err := fetchRepoIndex(types.Repo{URL: server.URL})
 			assert.NoErr(t, err)
 		})
 	}
@@ -266,7 +268,7 @@ func Test_parseRepoIndex(t *testing.T) {
 }
 
 func Test_chartsFromIndex(t *testing.T) {
-	r := repo{Name: "test", URL: "http://testrepo.com"}
+	r := types.Repo{Name: "test", URL: "http://testrepo.com"}
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
 	charts := chartsFromIndex(index, r)
 	assert.Equal(t, len(charts), 2, "number of charts")
@@ -282,7 +284,7 @@ func Test_chartsFromIndex(t *testing.T) {
 }
 
 func Test_newChart(t *testing.T) {
-	r := repo{Name: "test", URL: "http://testrepo.com"}
+	r := types.Repo{Name: "test", URL: "http://testrepo.com"}
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
 	c := newChart(index.Entries["wordpress"], r)
 	assert.Equal(t, c.Name, "wordpress", "correctly built")
@@ -299,7 +301,7 @@ func Test_importCharts(t *testing.T) {
 	m.On("RemoveAll", mock.Anything)
 	dbSession := mockstore.NewMockSession(m)
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
-	charts := chartsFromIndex(index, repo{Name: "test", URL: "http://testrepo.com"})
+	charts := chartsFromIndex(index, types.Repo{Name: "test", URL: "http://testrepo.com"})
 	importCharts(dbSession, charts)
 
 	m.AssertExpectations(t)
@@ -309,7 +311,7 @@ func Test_importCharts(t *testing.T) {
 	args := m.Calls[0].Arguments.Get(0).([]interface{})
 	assert.Equal(t, len(args), len(charts)*2, "number of selector, chart pairs to upsert")
 	for i := 0; i < len(args); i += 2 {
-		c := args[i+1].(chart)
+		c := args[i+1].(types.Chart)
 		assert.Equal(t, args[i], bson.M{"_id": "test/" + c.Name}, "selector")
 	}
 }
@@ -321,7 +323,7 @@ func Test_DeleteRepo(t *testing.T) {
 	})
 	dbSession := mockstore.NewMockSession(m)
 
-	err := deleteRepo(dbSession, "test")
+	err := DeleteRepo(dbSession, "test")
 	if err != nil {
 		t.Errorf("failed to delete chart repo test: %v", err)
 	}
@@ -332,12 +334,12 @@ func Test_fetchAndImportIcon(t *testing.T) {
 	t.Run("no icon", func(t *testing.T) {
 		m := mock.Mock{}
 		dbSession := mockstore.NewMockSession(&m)
-		c := chart{ID: "test/acs-engine-autoscaler"}
+		c := types.Chart{ID: "test/acs-engine-autoscaler"}
 		assert.NoErr(t, fetchAndImportIcon(dbSession, c))
 	})
 
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
-	charts := chartsFromIndex(index, repo{Name: "test", URL: "http://testrepo.com"})
+	charts := chartsFromIndex(index, types.Repo{Name: "test", URL: "http://testrepo.com"})
 
 	t.Run("failed download", func(t *testing.T) {
 		netClient = &badHTTPClient{}
@@ -368,7 +370,7 @@ func Test_fetchAndImportIcon(t *testing.T) {
 
 func Test_fetchAndImportFiles(t *testing.T) {
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
-	charts := chartsFromIndex(index, repo{Name: "test", URL: "http://testrepo.com", AuthorizationHeader: "Bearer ThisSecretAccessTokenAuthenticatesTheClient1s"})
+	charts := chartsFromIndex(index, types.Repo{Name: "test", URL: "http://testrepo.com", AuthorizationHeader: "Bearer ThisSecretAccessTokenAuthenticatesTheClient1s"})
 	cv := charts[0].ChartVersions[0]
 
 	t.Run("http error", func(t *testing.T) {
@@ -384,7 +386,7 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m := mock.Mock{}
 		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		m.On("UpsertId", chartFilesID, chartFiles{chartFilesID, "", "", charts[0].Repo, cv.Digest})
+		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, "", "", charts[0].Repo, cv.Digest})
 		dbSession := mockstore.NewMockSession(&m)
 		err := fetchAndImportFiles(dbSession, charts[0].Name, charts[0].Repo, cv)
 		assert.NoErr(t, err)
@@ -396,7 +398,7 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m := mock.Mock{}
 		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		m.On("UpsertId", chartFilesID, chartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest})
+		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest})
 		dbSession := mockstore.NewMockSession(&m)
 		err := fetchAndImportFiles(dbSession, charts[0].Name, charts[0].Repo, cv)
 		assert.NoErr(t, err)
@@ -408,7 +410,7 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m := mock.Mock{}
 		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		m.On("UpsertId", chartFilesID, chartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest})
+		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest})
 		dbSession := mockstore.NewMockSession(&m)
 		err := fetchAndImportFiles(dbSession, charts[0].Name, charts[0].Repo, cv)
 		assert.NoErr(t, err)
@@ -427,14 +429,14 @@ func Test_fetchAndImportFiles(t *testing.T) {
 }
 
 func Test_chartTarballURL(t *testing.T) {
-	r := repo{Name: "test", URL: "http://testrepo.com"}
+	r := types.Repo{Name: "test", URL: "http://testrepo.com"}
 	tests := []struct {
 		name   string
-		cv     chartVersion
+		cv     types.ChartVersion
 		wanted string
 	}{
-		{"absolute url", chartVersion{URLs: []string{"http://testrepo.com/wordpress-0.1.0.tgz"}}, "http://testrepo.com/wordpress-0.1.0.tgz"},
-		{"relative url", chartVersion{URLs: []string{"wordpress-0.1.0.tgz"}}, "http://testrepo.com/wordpress-0.1.0.tgz"},
+		{"absolute url", types.ChartVersion{URLs: []string{"http://testrepo.com/wordpress-0.1.0.tgz"}}, "http://testrepo.com/wordpress-0.1.0.tgz"},
+		{"relative url", types.ChartVersion{URLs: []string{"wordpress-0.1.0.tgz"}}, "http://testrepo.com/wordpress-0.1.0.tgz"},
 	}
 
 	for _, tt := range tests {
@@ -586,6 +588,6 @@ func Test_emptyChartRepo(t *testing.T) {
 	netClient = &emptyChartRepoHTTPClient{}
 	m := mock.Mock{}
 	dbSession := mockstore.NewMockSession(&m)
-	err := syncRepo(dbSession, "testRepo", "https://my.examplerepo.com", "")
+	err := SyncRepo(dbSession, "testRepo", "https://my.examplerepo.com", "")
 	assert.ExistsErr(t, err, "Failed Request")
 }

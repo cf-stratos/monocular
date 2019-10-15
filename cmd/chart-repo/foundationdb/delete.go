@@ -14,17 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package foundationdb
 
 import (
 	"os"
+
+	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
 
 	"github.com/kubeapps/common/datastore"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-var deleteCmd = &cobra.Command{
+var DeleteCmd = &cobra.Command{
 	Use:   "delete [REPO NAME]",
 	Short: "delete a chart repository",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -58,7 +60,7 @@ var deleteCmd = &cobra.Command{
 		if err != nil {
 			logrus.Fatalf("Can't connect to mongoDB: %v", err)
 		}
-		if err = deleteRepo(dbSession, args[0]); err != nil {
+		if err = utils.DeleteRepo(dbSession, args[0]); err != nil {
 			logrus.Fatalf("Can't delete chart repository %s from database: %v", args[0], err)
 		}
 

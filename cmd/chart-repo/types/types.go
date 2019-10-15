@@ -14,37 +14,37 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package types
 
 import (
 	"time"
 )
 
-type repo struct {
+type Repo struct {
 	Name                string
 	URL                 string
 	AuthorizationHeader string `bson:"-"`
 }
 
-type maintainer struct {
+type Maintainer struct {
 	Name  string
 	Email string
 }
 
-type chart struct {
+type Chart struct {
 	ID            string `bson:"_id"`
 	Name          string
-	Repo          repo
+	Repo          Repo
 	Description   string
 	Home          string
 	Keywords      []string
-	Maintainers   []maintainer
+	Maintainers   []Maintainer
 	Sources       []string
 	Icon          string
-	ChartVersions []chartVersion
+	ChartVersions []ChartVersion
 }
 
-type chartVersion struct {
+type ChartVersion struct {
 	Version    string
 	AppVersion string
 	Created    time.Time
@@ -52,10 +52,10 @@ type chartVersion struct {
 	URLs       []string
 }
 
-type chartFiles struct {
+type ChartFiles struct {
 	ID     string `bson:"_id"`
 	Readme string
 	Values string
-	Repo   repo
+	Repo   Repo
 	Digest string
 }

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package utils
 
 import (
 	"archive/tar"
@@ -34,6 +34,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cf-stratos/monocular/cmd/chart-repo/types"
+
 	"github.com/disintegration/imaging"
 	"github.com/ghodss/yaml"
 	"github.com/globalsign/mgo/bson"
@@ -52,8 +54,8 @@ const (
 
 type importChartFilesJob struct {
 	Name         string
-	Repo         repo
-	ChartVersion chartVersion
+	Repo         types.Repo
+	ChartVersion types.ChartVersion
 }
 
 type httpClient interface {
@@ -84,14 +86,14 @@ func init() {
 // These steps are processed in this way to ensure relevant chart data is
 // imported into the database as fast as possible. E.g. we want all icons for
 // charts before fetching readmes for each chart and version pair.
-func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizationHeader string) error {
+func SyncRepo(dbSession datastore.Session, repoName, repoURL string, authorizationHeader string) error {
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
 		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
 		return err
 	}
 
-	r := repo{Name: repoName, URL: url.String(), AuthorizationHeader: authorizationHeader}
+	r := types.Repo{Name: repoName, URL: url.String(), AuthorizationHeader: authorizationHeader}
 	index, err := fetchRepoIndex(r)
 	if err != nil {
 		return err
@@ -108,7 +110,7 @@ func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizati
 
 	// Process 10 charts at a time
 	numWorkers := 10
-	iconJobs := make(chan chart, numWorkers)
+	iconJobs := make(chan types.Chart, numWorkers)
 	chartFilesJobs := make(chan importChartFilesJob, numWorkers)
 	var wg sync.WaitGroup
 
@@ -151,7 +153,7 @@ func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizati
 	return nil
 }
 
-func deleteRepo(dbSession datastore.Session, repoName string) error {
+func DeleteRepo(dbSession datastore.Session, repoName string) error {
 	db, closer := dbSession.DB()
 	defer closer()
 	_, err := db.C(chartCollection).RemoveAll(bson.M{
@@ -167,7 +169,7 @@ func deleteRepo(dbSession datastore.Session, repoName string) error {
 	return err
 }
 
-func fetchRepoIndex(r repo) (*helmrepo.IndexFile, error) {
+func fetchRepoIndex(r types.Repo) (*helmrepo.IndexFile, error) {
 	indexURL, err := parseRepoUrl(r.URL)
 	if err != nil {
 		log.WithFields(log.Fields{"url": r.URL}).WithError(err).Error("failed to parse URL")
@@ -216,8 +218,8 @@ func parseRepoIndex(body []byte) (*helmrepo.IndexFile, error) {
 	return &index, nil
 }
 
-func chartsFromIndex(index *helmrepo.IndexFile, r repo) []chart {
-	var charts []chart
+func chartsFromIndex(index *helmrepo.IndexFile, r types.Repo) []types.Chart {
+	var charts []types.Chart
 	for _, entry := range index.Entries {
 		if entry[0].GetDeprecated() {
 			log.WithFields(log.Fields{"name": entry[0].GetName()}).Info("skipping deprecated chart")
@@ -230,8 +232,8 @@ func chartsFromIndex(index *helmrepo.IndexFile, r repo) []chart {
 
 // Takes an entry from the index and constructs a database representation of the
 // object.
-func newChart(entry helmrepo.ChartVersions, r repo) chart {
-	var c chart
+func newChart(entry helmrepo.ChartVersions, r types.Repo) types.Chart {
+	var c types.Chart
 	copier.Copy(&c, entry[0])
 	copier.Copy(&c.ChartVersions, entry)
 	c.Repo = r
@@ -239,7 +241,7 @@ func newChart(entry helmrepo.ChartVersions, r repo) chart {
 	return c
 }
 
-func importCharts(dbSession datastore.Session, charts []chart) error {
+func importCharts(dbSession datastore.Session, charts []types.Chart) error {
 	var pairs []interface{}
 	var chartIDs []string
 	for _, c := range charts {
@@ -267,7 +269,7 @@ func importCharts(dbSession datastore.Session, charts []chart) error {
 	return err
 }
 
-func importWorker(dbSession datastore.Session, wg *sync.WaitGroup, icons <-chan chart, chartFiles <-chan importChartFilesJob) {
+func importWorker(dbSession datastore.Session, wg *sync.WaitGroup, icons <-chan types.Chart, chartFiles <-chan importChartFilesJob) {
 	defer wg.Done()
 	for c := range icons {
 		log.WithFields(log.Fields{"name": c.Name}).Debug("importing icon")
@@ -283,7 +285,7 @@ func importWorker(dbSession datastore.Session, wg *sync.WaitGroup, icons <-chan 
 	}
 }
 
-func fetchAndImportIcon(dbSession datastore.Session, c chart) error {
+func fetchAndImportIcon(dbSession datastore.Session, c types.Chart) error {
 	if c.Icon == "" {
 		log.WithFields(log.Fields{"name": c.Name}).Info("icon not found")
 		return nil
@@ -326,13 +328,13 @@ func fetchAndImportIcon(dbSession datastore.Session, c chart) error {
 	return db.C(chartCollection).UpdateId(c.ID, bson.M{"$set": bson.M{"raw_icon": b.Bytes()}})
 }
 
-func fetchAndImportFiles(dbSession datastore.Session, name string, r repo, cv chartVersion) error {
+func fetchAndImportFiles(dbSession datastore.Session, name string, r types.Repo, cv types.ChartVersion) error {
 	chartFilesID := fmt.Sprintf("%s/%s-%s", r.Name, name, cv.Version)
 	db, closer := dbSession.DB()
 	defer closer()
 
 	// Check if we already have indexed files for this chart version and digest
-	if err := db.C(chartFilesCollection).Find(bson.M{"_id": chartFilesID, "digest": cv.Digest}).One(&chartFiles{}); err == nil {
+	if err := db.C(chartFilesCollection).Find(bson.M{"_id": chartFilesID, "digest": cv.Digest}).One(&types.ChartFiles{}); err == nil {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Debug("skipping existing files")
 		return nil
 	}
@@ -374,7 +376,7 @@ func fetchAndImportFiles(dbSession datastore.Session, name string, r repo, cv ch
 		return err
 	}
 
-	chartFiles := chartFiles{ID: chartFilesID, Repo: r, Digest: cv.Digest}
+	chartFiles := types.ChartFiles{ID: chartFilesID, Repo: r, Digest: cv.Digest}
 	if v, ok := files[readmeFileName]; ok {
 		chartFiles.Readme = v
 	} else {
@@ -416,7 +418,7 @@ func extractFilesFromTarball(filenames []string, tarf *tar.Reader) (map[string]s
 	return ret, nil
 }
 
-func chartTarballURL(r repo, cv chartVersion) string {
+func chartTarballURL(r types.Repo, cv types.ChartVersion) string {
 	source := cv.URLs[0]
 	if _, err := parseRepoUrl(source); err != nil {
 		// If the chart URL is not absolute, join with repo URL. It's fine if the

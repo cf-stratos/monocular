@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package utils
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ import (
 
 var (
 	version          = "devel"
-	userAgentComment string
+	UserAgentComment string
 )
 
 // Returns the user agent to be used during calls to the chart repositories
@@ -35,13 +35,13 @@ var (
 // More info here https://github.com/kubeapps/kubeapps/issues/767#issuecomment-436835938
 func userAgent() string {
 	ua := "chart-repo/" + version
-	if userAgentComment != "" {
-		ua = fmt.Sprintf("%s (%s)", ua, userAgentComment)
+	if UserAgentComment != "" {
+		ua = fmt.Sprintf("%s (%s)", ua, UserAgentComment)
 	}
 	return ua
 }
 
-var versionCmd = &cobra.Command{
+var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "returns version information",
 	Run: func(cmd *cobra.Command, args []string) {
