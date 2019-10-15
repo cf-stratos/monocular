@@ -19,13 +19,12 @@ package foundationdb
 import (
 	"os"
 
-	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
-
 	"github.com/kubeapps/common/datastore"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
+//SyncCmd Add a new chart repository to FoundationDB and periodically sync it
 var SyncCmd = &cobra.Command{
 	Use:   "sync [REPO NAME] [REPO URL]",
 	Short: "add a new chart repository, and resync its charts periodically",
@@ -63,7 +62,7 @@ var SyncCmd = &cobra.Command{
 		}
 
 		authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
-		if err = utils.SyncRepo(dbSession, args[0], args[1], authorizationHeader); err != nil {
+		if err = syncRepo(dbSession, args[0], args[1], authorizationHeader); err != nil {
 			logrus.Fatalf("Can't add chart repository to database: %v", err)
 		}
 

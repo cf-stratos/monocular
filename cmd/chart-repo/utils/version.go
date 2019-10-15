@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	version          = "devel"
+	Version          = "devel"
 	UserAgentComment string
 )
 
@@ -33,8 +33,8 @@ var (
 // chart-repo/1.0
 // chart-repo/1.0 (monocular v1.0-beta4)
 // More info here https://github.com/kubeapps/kubeapps/issues/767#issuecomment-436835938
-func userAgent() string {
-	ua := "chart-repo/" + version
+func UserAgent() string {
+	ua := "chart-repo/" + Version
 	if UserAgentComment != "" {
 		ua = fmt.Sprintf("%s (%s)", ua, UserAgentComment)
 	}
@@ -45,6 +45,6 @@ var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "returns version information",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(version)
+		fmt.Println(Version)
 	},
 }

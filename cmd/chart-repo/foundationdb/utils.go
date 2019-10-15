@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package utils
+package foundationdb
 
 import (
 	"archive/tar"
@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/cf-stratos/monocular/cmd/chart-repo/types"
+	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
 
 	"github.com/disintegration/imaging"
 	"github.com/ghodss/yaml"
@@ -77,7 +78,7 @@ func init() {
 	}
 }
 
-// Syncing is performed in the following steps:
+// SyncRepo Syncing is performed in the following steps:
 // 1. Update database to match chart metadata from index
 // 2. Concurrently process icons for charts (concurrently)
 // 3. Concurrently process the README and values.yaml for the latest chart version of each chart
@@ -86,7 +87,7 @@ func init() {
 // These steps are processed in this way to ensure relevant chart data is
 // imported into the database as fast as possible. E.g. we want all icons for
 // charts before fetching readmes for each chart and version pair.
-func SyncRepo(dbSession datastore.Session, repoName, repoURL string, authorizationHeader string) error {
+func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizationHeader string) error {
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
 		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
@@ -153,7 +154,7 @@ func SyncRepo(dbSession datastore.Session, repoName, repoURL string, authorizati
 	return nil
 }
 
-func DeleteRepo(dbSession datastore.Session, repoName string) error {
+func deleteRepo(dbSession datastore.Session, repoName string) error {
 	db, closer := dbSession.DB()
 	defer closer()
 	_, err := db.C(chartCollection).RemoveAll(bson.M{
@@ -182,7 +183,7 @@ func fetchRepoIndex(r types.Repo) (*helmrepo.IndexFile, error) {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", userAgent())
+	req.Header.Set("User-Agent", utils.UserAgent())
 	if len(r.AuthorizationHeader) > 0 {
 		req.Header.Set("Authorization", r.AuthorizationHeader)
 	}
@@ -295,7 +296,7 @@ func fetchAndImportIcon(dbSession datastore.Session, c types.Chart) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", userAgent())
+	req.Header.Set("User-Agent", utils.UserAgent())
 	if len(c.Repo.AuthorizationHeader) > 0 {
 		req.Header.Set("Authorization", c.Repo.AuthorizationHeader)
 	}
@@ -345,7 +346,7 @@ func fetchAndImportFiles(dbSession datastore.Session, name string, r types.Repo,
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", userAgent())
+	req.Header.Set("User-Agent", utils.UserAgent())
 	if len(r.AuthorizationHeader) > 0 {
 		req.Header.Set("Authorization", r.AuthorizationHeader)
 	}

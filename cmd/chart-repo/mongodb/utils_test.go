@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package utils
+package mongodb
 
 import (
 	"archive/tar"
@@ -35,6 +35,7 @@ import (
 	"testing"
 
 	"github.com/cf-stratos/monocular/cmd/chart-repo/types"
+	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
 
 	"github.com/arschles/assert"
 	"github.com/disintegration/imaging"
@@ -168,7 +169,7 @@ func Test_syncURLInvalidity(t *testing.T) {
 	dbSession := mockstore.NewMockSession(&m)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := SyncRepo(dbSession, "test", tt.repoURL, "")
+			err := syncRepo(dbSession, "test", tt.repoURL, "")
 			assert.ExistsErr(t, err, tt.name)
 		})
 	}
@@ -223,11 +224,11 @@ func Test_fetchRepoIndexUserAgent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Override global variables used to generate the userAgent
 			if tt.version != "" {
-				version = tt.version
+				utils.Version = tt.version
 			}
 
 			if tt.userAgentComment != "" {
-				UserAgentComment = tt.userAgentComment
+				utils.UserAgentComment = tt.userAgentComment
 			}
 
 			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -323,7 +324,7 @@ func Test_DeleteRepo(t *testing.T) {
 	})
 	dbSession := mockstore.NewMockSession(m)
 
-	err := DeleteRepo(dbSession, "test")
+	err := deleteRepo(dbSession, "test")
 	if err != nil {
 		t.Errorf("failed to delete chart repo test: %v", err)
 	}
@@ -588,6 +589,6 @@ func Test_emptyChartRepo(t *testing.T) {
 	netClient = &emptyChartRepoHTTPClient{}
 	m := mock.Mock{}
 	dbSession := mockstore.NewMockSession(&m)
-	err := SyncRepo(dbSession, "testRepo", "https://my.examplerepo.com", "")
+	err := syncRepo(dbSession, "testRepo", "https://my.examplerepo.com", "")
 	assert.ExistsErr(t, err, "Failed Request")
 }

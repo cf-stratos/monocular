@@ -19,13 +19,12 @@ package foundationdb
 import (
 	"os"
 
-	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
-
 	"github.com/kubeapps/common/datastore"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
+//DeleteCmd Delete a chart repository from FoundationDB
 var DeleteCmd = &cobra.Command{
 	Use:   "delete [REPO NAME]",
 	Short: "delete a chart repository",
@@ -35,19 +34,19 @@ var DeleteCmd = &cobra.Command{
 			cmd.Help()
 			return
 		}
-		mongoURL, err := cmd.Flags().GetString("mongo-url")
+		fdbURL, err := cmd.Flags().GetString("mongo-url")
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		mongoDB, err := cmd.Flags().GetString("mongo-database")
+		fDB, err := cmd.Flags().GetString("mongo-database")
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		mongoUser, err := cmd.Flags().GetString("mongo-user")
+		fdbUser, err := cmd.Flags().GetString("mongo-user")
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		mongoPW := os.Getenv("MONGO_PASSWORD")
+		fdbPW := os.Getenv("FDB_PASSWORD")
 		debug, err := cmd.Flags().GetBool("debug")
 		if err != nil {
 			logrus.Fatal(err)
@@ -55,12 +54,12 @@ var DeleteCmd = &cobra.Command{
 		if debug {
 			logrus.SetLevel(logrus.DebugLevel)
 		}
-		mongoConfig := datastore.Config{URL: mongoURL, Database: mongoDB, Username: mongoUser, Password: mongoPW}
-		dbSession, err := datastore.NewSession(mongoConfig)
+		fdbConfig := datastore.Config{URL: fdbURL, Database: fDB, Username: fdbUser, Password: fdbPW}
+		dbSession, err := datastore.NewSession(fdbConfig)
 		if err != nil {
-			logrus.Fatalf("Can't connect to mongoDB: %v", err)
+			logrus.Fatalf("Can't connect to FoundationDB: %v", err)
 		}
-		if err = utils.DeleteRepo(dbSession, args[0]); err != nil {
+		if err = deleteRepo(dbSession, args[0]); err != nil {
 			logrus.Fatalf("Can't delete chart repository %s from database: %v", args[0], err)
 		}
 

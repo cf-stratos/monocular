@@ -19,8 +19,6 @@ package mongodb
 import (
 	"os"
 
-	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
-
 	"github.com/kubeapps/common/datastore"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -60,7 +58,7 @@ var DeleteCmd = &cobra.Command{
 		if err != nil {
 			logrus.Fatalf("Can't connect to mongoDB: %v", err)
 		}
-		if err = utils.DeleteRepo(dbSession, args[0]); err != nil {
+		if err = deleteRepo(dbSession, args[0]); err != nil {
 			logrus.Fatalf("Can't delete chart repository %s from database: %v", args[0], err)
 		}
 
