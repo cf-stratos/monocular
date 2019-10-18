@@ -34,8 +34,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cf-stratos/monocular/cmd/chart-repo/types"
-	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
+	"testlocal/monocular/cmd/chart-repo/types"
+	"testlocal/monocular/cmd/chart-repo/utils"
 
 	"github.com/arschles/assert"
 	"github.com/disintegration/imaging"

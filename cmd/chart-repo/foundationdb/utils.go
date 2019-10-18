@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -34,8 +35,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cf-stratos/monocular/cmd/chart-repo/types"
-	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
+	"testlocal/monocular/cmd/chart-repo/types"
+	"testlocal/monocular/cmd/chart-repo/utils"
 
 	"github.com/disintegration/imaging"
 	"github.com/ghodss/yaml"
@@ -44,6 +45,10 @@ import (
 	"github.com/kubeapps/common/datastore"
 	log "github.com/sirupsen/logrus"
 	helmrepo "k8s.io/helm/pkg/repo"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 const (
@@ -88,6 +93,25 @@ func init() {
 // imported into the database as fast as possible. E.g. we want all icons for
 // charts before fetching readmes for each chart and version pair.
 func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizationHeader string) error {
+
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://127.0.0.1:27016"))
+	ctx, _ = context.WithTimeout(context.Background(), 2*time.Second)
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		log.Fatalf("Can't connect to FoundationDB: %v", err)
+	} else {
+		log.Debug("Successfully connected to fdb with official driver")
+		collection := client.Database("testing").Collection("numbers")
+		ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
+		res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
+		if err != nil {
+			log.Fatalf("Failed to insert document")
+		}
+		id := res.InsertedID
+		log.Debugf("Inserted doc with ID: %v", id)
+	}
+
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
 		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
@@ -253,10 +277,14 @@ func importCharts(dbSession datastore.Session, charts []types.Chart) error {
 
 	db, closer := dbSession.DB()
 	defer closer()
+	log.Debugf("About to bulk. Session: %v", dbSession)
 	bulk := db.C(chartCollection).Bulk()
+	log.Debugf("Done bulk. Bulk: %v", bulk)
 
 	// Upsert pairs of selectors, charts
+	log.Debugf("Doing bulk upsert...")
 	bulk.Upsert(pairs...)
+	log.Debugf("Done bulk upsert.")
 
 	// Remove charts no longer existing in index
 	bulk.RemoveAll(bson.M{
@@ -266,7 +294,9 @@ func importCharts(dbSession datastore.Session, charts []types.Chart) error {
 		"repo.name": charts[0].Repo.Name,
 	})
 
+	log.Debugf("Running bulk...")
 	_, err := bulk.Run()
+	log.Debugf("Finished running bulk.")
 	return err
 }
 

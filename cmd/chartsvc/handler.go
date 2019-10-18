@@ -22,9 +22,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"testlocal/monocular/cmd/chartsvc/models"
+
 	"github.com/globalsign/mgo/bson"
 	"github.com/gorilla/mux"
-	"github.com/helm/monocular/cmd/chartsvc/models"
 	"github.com/kubeapps/common/response"
 	log "github.com/sirupsen/logrus"
 )

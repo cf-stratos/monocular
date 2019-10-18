@@ -26,8 +26,9 @@ import (
 	"strings"
 	"testing"
 
+	"testlocal/monocular/cmd/chartsvc/models"
+
 	"github.com/disintegration/imaging"
-	"github.com/helm/monocular/cmd/chartsvc/models"
 	"github.com/kubeapps/common/datastore/mockstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

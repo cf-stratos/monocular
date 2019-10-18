@@ -1,4 +1,4 @@
-module github.com/cf-stratos/monocular
+module testlocal/monocular
 
 go 1.12
 
@@ -11,11 +11,13 @@ require (
 	github.com/disintegration/imaging v1.5.0
 	github.com/ghodss/yaml v0.0.0-20150909031657-73d445a93680
 	github.com/globalsign/mgo v0.0.0-20180615134936-113d3961e731
+	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/gobwas/glob v0.2.3
 	github.com/golang/protobuf v1.2.0
+	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gorilla/context v1.1.1
 	github.com/gorilla/mux v1.6.2
-	github.com/helm/monocular v1.8.3
+	github.com/helm/monocular v1.9.0
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/jinzhu/copier v0.0.0-20180308034124-7e38e58719c3
@@ -34,9 +36,13 @@ require (
 	github.com/stretchr/testify v1.2.2
 	github.com/unrolled/render v0.0.0-20180914162206-b9786414de4d
 	github.com/urfave/negroni v1.0.0
+	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
+	github.com/xdg/stringprep v1.0.0 // indirect
+	go.mongodb.org/mongo-driver v1.1.2
 	golang.org/x/crypto v0.0.0-20180904163835-0709b304e793
 	golang.org/x/image v0.0.0-20180926015637-991ec62608f3
 	golang.org/x/sys v0.0.0-20180928133829-e4b3c5e90611
+	golang.org/x/text v0.3.2 // indirect
 	gopkg.in/yaml.v2 v2.2.1
 	k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d
 	k8s.io/client-go v9.0.0+incompatible

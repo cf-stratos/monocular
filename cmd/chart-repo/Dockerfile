@@ -3,7 +3,8 @@ COPY . /go/src/github.com/helm/monocular
 WORKDIR /go/src/github.com/helm/monocular
 
 ARG VERSION
-RUN CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags "-X main.version=$VERSION" ./cmd/chart-repo
+ENV GO111MODULE=on
+RUN CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags "-X main.version=$VERSION" ./cmd/chart-repo 
 
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

@@ -34,8 +34,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cf-stratos/monocular/cmd/chart-repo/types"
-	"github.com/cf-stratos/monocular/cmd/chart-repo/utils"
+	"testlocal/monocular/cmd/chart-repo/types"
+	"testlocal/monocular/cmd/chart-repo/utils"
 
 	"github.com/disintegration/imaging"
 	"github.com/ghodss/yaml"
