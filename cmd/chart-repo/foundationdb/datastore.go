@@ -12,7 +12,7 @@ func Database(client *mongo.Client, dbName string) (*mongo.Database, func()) {
 
 	db := client.Database(dbName)
 	return db, func() {
-		err := client.Disconnect(context.TODO())
+		err := client.Disconnect(context.Background())
 
 		if err != nil {
 			log.Fatal(err)

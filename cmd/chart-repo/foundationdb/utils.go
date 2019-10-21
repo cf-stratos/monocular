@@ -41,7 +41,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/globalsign/mgo/bson"
 	"github.com/jinzhu/copier"
-	"github.com/kubeapps/common/datastore"
 	log "github.com/sirupsen/logrus"
 	helmrepo "k8s.io/helm/pkg/repo"
 
@@ -53,6 +52,7 @@ const (
 	chartFilesCollection  = "files"
 	defaultTimeoutSeconds = 10
 	additionalCAFile      = "/usr/local/share/ca-certificates/ca.crt"
+	dbName                = "test"
 )
 
 type importChartFilesJob struct {
@@ -166,9 +166,11 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 	return nil
 }
 
-func deleteRepo(dbSession datastore.Session, repoName string) error {
-	db, closer := dbSession.DB()
+func deleteRepo(dbClient *mongo.Client, repoName string) error {
+	db, closer := Database(dbClient, dbName)
 	defer closer()
+	//TODO kate use RemoveMany?
+	//collection := db.Collection(chartCollection)
 	_, err := db.C(chartCollection).RemoveAll(bson.M{
 		"repo.name": repoName,
 	})
@@ -176,6 +178,8 @@ func deleteRepo(dbSession datastore.Session, repoName string) error {
 		return err
 	}
 
+	//TODO kate use RemoveMany?
+	//collection := db.Collection(chartFilesCollection)
 	_, err = db.C(chartFilesCollection).RemoveAll(bson.M{
 		"repo.name": repoName,
 	})
@@ -266,47 +270,39 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 	db, closer := Database(dbClient, dbName)
 	defer closer()
 
-	collection, err := db.Collection("charts")
+	collection := db.Collection(chartCollection)
+	//TODO kate set upsert flag and insert the pairs here
+	//collection.InsertMany(ctx context.Context, documents []interface{}, opts ...*options.InsertManyOptions)
 
-	bulk := db.C(chartCollection).Bulk()
+	//TODO Kate Remove charts no longer existing in index
+	//collection.DeleteMany()
+	//bulk.RemoveAll(bson.M{
+	//	"_id": bson.M{
+	//		"$nin": chartIDs,
+	//	},
+	//	"repo.name": charts[0].Repo.Name,
+	//})
 
-	// Upsert pairs of selectors, charts
-	log.Debugf("Doing bulk upsert...")
-	bulk.Upsert(pairs...)
-	log.Debugf("Done bulk upsert.")
-
-	// Remove charts no longer existing in index
-	bulk.RemoveAll(bson.M{
-		"_id": bson.M{
-			"$nin": chartIDs,
-		},
-		"repo.name": charts[0].Repo.Name,
-	})
-
-	log.Debugf("Running bulk...")
-	_, err := bulk.Run()
-	log.Debugf("Finished running bulk.")
 	return err
 }
 
-func dbCloser(dbClient)
-func importWorker(dbSession datastore.Session, wg *sync.WaitGroup, icons <-chan types.Chart, chartFiles <-chan importChartFilesJob) {
+func importWorker(dbClient *mongo.Client, wg *sync.WaitGroup, icons <-chan types.Chart, chartFiles <-chan importChartFilesJob) {
 	defer wg.Done()
 	for c := range icons {
 		log.WithFields(log.Fields{"name": c.Name}).Debug("importing icon")
-		if err := fetchAndImportIcon(dbSession, c); err != nil {
+		if err := fetchAndImportIcon(dbClient, c); err != nil {
 			log.WithFields(log.Fields{"name": c.Name}).WithError(err).Error("failed to import icon")
 		}
 	}
 	for j := range chartFiles {
 		log.WithFields(log.Fields{"name": j.Name, "version": j.ChartVersion.Version}).Debug("importing readme and values")
-		if err := fetchAndImportFiles(dbSession, j.Name, j.Repo, j.ChartVersion); err != nil {
+		if err := fetchAndImportFiles(dbClient, j.Name, j.Repo, j.ChartVersion); err != nil {
 			log.WithFields(log.Fields{"name": j.Name, "version": j.ChartVersion.Version}).WithError(err).Error("failed to import files")
 		}
 	}
 }
 
-func fetchAndImportIcon(dbSession datastore.Session, c types.Chart) error {
+func fetchAndImportIcon(dbClient *mongo.Client, c types.Chart) error {
 	if c.Icon == "" {
 		log.WithFields(log.Fields{"name": c.Name}).Info("icon not found")
 		return nil
@@ -344,17 +340,22 @@ func fetchAndImportIcon(dbSession datastore.Session, c types.Chart) error {
 	var b bytes.Buffer
 	imaging.Encode(&b, icon, imaging.PNG)
 
-	db, closer := dbSession.DB()
+	db, closer := Database(dbClient, dbName)
 	defer closer()
+	//TODO Kate
+	//collection := db.Collection(chartCollection)
+	//Update single icon
 	return db.C(chartCollection).UpdateId(c.ID, bson.M{"$set": bson.M{"raw_icon": b.Bytes()}})
 }
 
-func fetchAndImportFiles(dbSession datastore.Session, name string, r types.Repo, cv types.ChartVersion) error {
+func fetchAndImportFiles(dbClient *mongo.Client, name string, r types.Repo, cv types.ChartVersion) error {
 	chartFilesID := fmt.Sprintf("%s/%s-%s", r.Name, name, cv.Version)
-	db, closer := dbSession.DB()
+	db, closer := Database(dbClient, dbName)
 	defer closer()
 
 	// Check if we already have indexed files for this chart version and digest
+	//collection := db.Collection(chartFilesCollection)
+	//TODO kate find chart file by ID and return if we already have it there
 	if err := db.C(chartFilesCollection).Find(bson.M{"_id": chartFilesID, "digest": cv.Digest}).One(&types.ChartFiles{}); err == nil {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Debug("skipping existing files")
 		return nil
@@ -411,6 +412,8 @@ func fetchAndImportFiles(dbSession datastore.Session, name string, r types.Repo,
 
 	// inserts the chart files if not already indexed, or updates the existing
 	// entry if digest has changed
+	//collection := db.Collection(chartFilesCollection)
+	//TODO kate use InsertOne with upsert flag
 	db.C(chartFilesCollection).UpsertId(chartFilesID, chartFiles)
 
 	return nil
