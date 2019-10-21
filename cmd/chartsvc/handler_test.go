@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"testlocal/monocular/cmd/chartsvc/models"
+	"local/monocular/cmd/chartsvc/models"
 
 	"github.com/disintegration/imaging"
 	"github.com/kubeapps/common/datastore/mockstore"

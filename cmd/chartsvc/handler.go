@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"testlocal/monocular/cmd/chartsvc/models"
+	"local/monocular/cmd/chartsvc/models"
 
 	"github.com/globalsign/mgo/bson"
 	"github.com/gorilla/mux"

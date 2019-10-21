@@ -17,11 +17,15 @@ limitations under the License.
 package foundationdb
 
 import (
+	"context"
 	"os"
+	"time"
 
-	"github.com/kubeapps/common/datastore"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 //SyncCmd Add a new chart repository to FoundationDB and periodically sync it
@@ -30,42 +34,47 @@ var SyncCmd = &cobra.Command{
 	Short: "add a new chart repository, and resync its charts periodically",
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) != 2 {
-			logrus.Info("Need exactly two arguments: [REPO NAME] [REPO URL]")
+			log.Info("Need exactly two arguments: [REPO NAME] [REPO URL]")
 			cmd.Help()
 			return
 		}
 
 		fdbURL, err := cmd.Flags().GetString("foundation-url")
 		if err != nil {
-			logrus.Fatal(err)
+			log.Fatal(err)
 		}
 		fDB, err := cmd.Flags().GetString("doclayer-database")
 		if err != nil {
-			logrus.Fatal(err)
+			log.Fatal(err)
 		}
-		fdbUser, err := cmd.Flags().GetString("fdb-user")
-		if err != nil {
-			logrus.Fatal(err)
-		}
-		fdbPW := os.Getenv("FDB_PASSWORD")
+		// fdbUser, err := cmd.Flags().GetString("fdb-user")
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+		// fdbPW := os.Getenv("FDB_PASSWORD")
 		debug, err := cmd.Flags().GetBool("debug")
 		if err != nil {
-			logrus.Fatal(err)
+			log.Fatal(err)
 		}
 		if debug {
-			logrus.SetLevel(logrus.DebugLevel)
+			log.SetLevel(log.DebugLevel)
 		}
-		mongoConfig := datastore.Config{URL: fdbURL, Database: fDB, Username: fdbUser, Password: fdbPW}
-		dbSession, err := datastore.NewSession(mongoConfig)
+
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		client, err := mongo.Connect(ctx, options.Client().ApplyURI(fdbURL))
+		ctx, _ = context.WithTimeout(context.Background(), 2*time.Second)
+		err = client.Ping(ctx, readpref.Primary())
 		if err != nil {
-			logrus.Fatalf("Can't connect to FoundationDB: %v", err)
+			log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
+		} else {
+			log.Info("Successfully connected to FoundationDB document layer.")
 		}
 
 		authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
-		if err = syncRepo(dbSession, args[0], args[1], authorizationHeader); err != nil {
-			logrus.Fatalf("Can't add chart repository to database: %v", err)
+		if err = syncRepo(client, fDB, args[0], args[1], authorizationHeader); err != nil {
+			log.Fatalf("Can't add chart repository to database: %v", err)
 		}
 
-		logrus.Infof("Successfully added the chart repository %s to database", args[0])
+		log.Infof("Successfully added the chart repository %s to database", args[0])
 	},
 }

@@ -20,7 +20,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -35,8 +34,8 @@ import (
 	"sync"
 	"time"
 
-	"testlocal/monocular/cmd/chart-repo/types"
-	"testlocal/monocular/cmd/chart-repo/utils"
+	"local/monocular/cmd/chart-repo/types"
+	"local/monocular/cmd/chart-repo/utils"
 
 	"github.com/disintegration/imaging"
 	"github.com/ghodss/yaml"
@@ -47,8 +46,6 @@ import (
 	helmrepo "k8s.io/helm/pkg/repo"
 
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 const (
@@ -92,25 +89,16 @@ func init() {
 // These steps are processed in this way to ensure relevant chart data is
 // imported into the database as fast as possible. E.g. we want all icons for
 // charts before fetching readmes for each chart and version pair.
-func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizationHeader string) error {
+func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
 
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://127.0.0.1:27016"))
-	ctx, _ = context.WithTimeout(context.Background(), 2*time.Second)
-	err = client.Ping(ctx, readpref.Primary())
-	if err != nil {
-		log.Fatalf("Can't connect to FoundationDB: %v", err)
-	} else {
-		log.Debug("Successfully connected to fdb with official driver")
-		collection := client.Database("testing").Collection("numbers")
-		ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
-		res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
-		if err != nil {
-			log.Fatalf("Failed to insert document")
-		}
-		id := res.InsertedID
-		log.Debugf("Inserted doc with ID: %v", id)
-	}
+	// collection := client.Database("testing").Collection("numbers")
+	// ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
+	// res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
+	// if err != nil {
+	// 	log.Fatalf("Failed to insert document")
+	// }
+	// id := res.InsertedID
+	// log.Debugf("Inserted doc with ID: %v", id)
 
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
@@ -128,7 +116,7 @@ func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizati
 	if len(charts) == 0 {
 		return errors.New("no charts in repository index")
 	}
-	err = importCharts(dbSession, charts)
+	err = importCharts(dbClient, dbName, charts)
 	if err != nil {
 		return err
 	}
@@ -142,7 +130,7 @@ func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizati
 	log.Debugf("starting %d workers", numWorkers)
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go importWorker(dbSession, &wg, iconJobs, chartFilesJobs)
+		go importWorker(dbClient, &wg, iconJobs, chartFilesJobs)
 	}
 
 	// Enqueue jobs to process chart icons
@@ -266,7 +254,7 @@ func newChart(entry helmrepo.ChartVersions, r types.Repo) types.Chart {
 	return c
 }
 
-func importCharts(dbSession datastore.Session, charts []types.Chart) error {
+func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) error {
 	var pairs []interface{}
 	var chartIDs []string
 	for _, c := range charts {
@@ -275,11 +263,12 @@ func importCharts(dbSession datastore.Session, charts []types.Chart) error {
 		pairs = append(pairs, bson.M{"_id": c.ID}, c)
 	}
 
-	db, closer := dbSession.DB()
+	db, closer := Database(dbClient, dbName)
 	defer closer()
-	log.Debugf("About to bulk. Session: %v", dbSession)
+
+	collection, err := db.Collection("charts")
+
 	bulk := db.C(chartCollection).Bulk()
-	log.Debugf("Done bulk. Bulk: %v", bulk)
 
 	// Upsert pairs of selectors, charts
 	log.Debugf("Doing bulk upsert...")
@@ -300,6 +289,7 @@ func importCharts(dbSession datastore.Session, charts []types.Chart) error {
 	return err
 }
 
+func dbCloser(dbClient)
 func importWorker(dbSession datastore.Session, wg *sync.WaitGroup, icons <-chan types.Chart, chartFiles <-chan importChartFilesJob) {
 	defer wg.Done()
 	for c := range icons {

@@ -34,8 +34,8 @@ import (
 	"sync"
 	"time"
 
-	"testlocal/monocular/cmd/chart-repo/types"
-	"testlocal/monocular/cmd/chart-repo/utils"
+	"local/monocular/cmd/chart-repo/types"
+	"local/monocular/cmd/chart-repo/utils"
 
 	"github.com/disintegration/imaging"
 	"github.com/ghodss/yaml"

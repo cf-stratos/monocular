@@ -1,0 +1,13 @@
+Run cmd directly:
+
+go run ./cmd/chart-repo/chart_repo.go sync --foundation-url=mongodb://127.0.0.1:27016/test --debug=true stable https://kubernetes-charts.storage.googleapis.com
+
+
+For docker cmd image build:
+
+make -C cmd/chart-repo docker-build
+
+For docker cmd image run:
+
+docker run -e FDB_PASSWORD=$FDB_PASSWORD --rm -ti --network=host quay.io/helmpack/chart-repo /chart-repo sync --foundation-url=mongodb://127.0.0.1:27016/test stable https://kubernetes-charts.storage.googleapis.com 
+

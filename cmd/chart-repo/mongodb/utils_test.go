@@ -34,8 +34,8 @@ import (
 	"strings"
 	"testing"
 
-	"testlocal/monocular/cmd/chart-repo/types"
-	"testlocal/monocular/cmd/chart-repo/utils"
+	"local/monocular/cmd/chart-repo/types"
+	"local/monocular/cmd/chart-repo/utils"
 
 	"github.com/arschles/assert"
 	"github.com/disintegration/imaging"

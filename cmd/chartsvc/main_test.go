@@ -23,7 +23,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"testlocal/monocular/cmd/chartsvc/models"
+	"local/monocular/cmd/chartsvc/models"
 
 	"github.com/kubeapps/common/datastore/mockstore"
 	"github.com/stretchr/testify/assert"

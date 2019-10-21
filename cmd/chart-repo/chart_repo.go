@@ -19,8 +19,8 @@ package main
 import (
 	"os"
 
-	"testlocal/monocular/cmd/chart-repo/foundationdb"
-	"testlocal/monocular/cmd/chart-repo/utils"
+	"local/monocular/cmd/chart-repo/foundationdb"
+	"local/monocular/cmd/chart-repo/utils"
 
 	"github.com/spf13/cobra"
 )
