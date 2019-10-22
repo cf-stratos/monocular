@@ -329,6 +329,16 @@ func fetchAndImportIcon(dbSession datastore.Session, c types.Chart) error {
 	return db.C(chartCollection).UpdateId(c.ID, bson.M{"$set": bson.M{"raw_icon": b.Bytes()}})
 }
 
+func toDoc(v interface{}) (doc *bson., err error) {
+    data, err := bson.Marshal(v)
+    if err != nil {
+        return
+    }
+
+    err = bson.Unmarshal(data, &doc)
+    return
+}
+
 func fetchAndImportFiles(dbSession datastore.Session, name string, r types.Repo, cv types.ChartVersion) error {
 	chartFilesID := fmt.Sprintf("%s/%s-%s", r.Name, name, cv.Version)
 	db, closer := dbSession.DB()

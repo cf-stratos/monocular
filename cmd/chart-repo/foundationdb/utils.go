@@ -45,6 +45,7 @@ import (
 	helmrepo "k8s.io/helm/pkg/repo"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -257,9 +258,9 @@ func newChart(entry helmrepo.ChartVersions, r types.Repo) types.Chart {
 }
 
 func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) error {
-	var chartIDs []string
 	var operations []mongo.WriteModel
 	operation := mongo.NewUpdateManyModel()
+	var chartIDs []primitive.ObjectID
 	for _, c := range charts {
 		chartIDs = append(chartIDs, c.ID)
 		// charts to upsert - pair of filter, chart
@@ -267,10 +268,20 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 			"$eq": c.ID,
 		},
 		})
-		updateDoc, err := bson.Marshal(c)
-		operation.SetUpdate(updateDoc)
-		operation.SetUpsert(true)
-		operations = append(operations, operation)
+		//log.Infof("CHART: %v", c)
+
+		chartBSON, err := bson.Marshal(c)
+		log.Infof("CHART BSON: %v", chartBSON)
+
+		if err != nil {
+			log.Errorf("Error marshalling chart to BSON: %v. Skipping this chart.", err)
+		} else {
+			update := bson.D{{"$set", chartBSON}}
+			//log.Infof("UPDATE BSON: %v", update)
+			operation.SetUpdate(update)
+			operation.SetUpsert(true)
+			operations = append(operations, operation)
+		}
 	}
 
 	db, closer := Database(dbClient, dbName)

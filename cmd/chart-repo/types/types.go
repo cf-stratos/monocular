@@ -18,6 +18,8 @@ package types
 
 import (
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Repo struct {
@@ -32,7 +34,7 @@ type Maintainer struct {
 }
 
 type Chart struct {
-	ID            string `bson:"_id"`
+	ID            primitive.ObjectID `bson:"_id"`
 	Name          string
 	Repo          Repo
 	Description   string
@@ -53,7 +55,7 @@ type ChartVersion struct {
 }
 
 type ChartFiles struct {
-	ID     string `bson:"_id"`
+	ID     primitive.ObjectID `bson:"_id"`
 	Readme string
 	Values string
 	Repo   Repo
