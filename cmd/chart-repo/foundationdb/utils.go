@@ -44,8 +44,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	helmrepo "k8s.io/helm/pkg/repo"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -168,23 +168,28 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 	return nil
 }
 
-func deleteRepo(dbClient *mongo.Client, repoName string) error {
+func deleteRepo(dbClient *mongo.Client, dbName, repoName string) error {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
 	//TODO kate use RemoveMany?
-	//collection := db.Collection(chartCollection)
-	_, err := db.C(chartCollection).RemoveAll(bson.M{
+	collection := db.Collection(chartCollection)
+	filter := bson.M{
 		"repo.name": repoName,
-	})
+	}
+	deleteResult, err := collection.DeleteMany(context.Background(), filter, options.Delete())
 	if err != nil {
+		log.Errorf("Error occurred during delete repo (deleting charts from index). Err: %v, Result: %v", err, deleteResult)
 		return err
 	}
+	log.Debugf("Repo delete (delete charts from index) result: %v", deleteResult)
 
-	//TODO kate use RemoveMany?
-	//collection := db.Collection(chartFilesCollection)
-	_, err = db.C(chartFilesCollection).RemoveAll(bson.M{
-		"repo.name": repoName,
-	})
+	collection = db.Collection(chartFilesCollection)
+	deleteResult, err = collection.DeleteMany(context.Background(), filter, options.Delete())
+	if err != nil {
+		log.Errorf("Error occurred during delete repo (deleting chart files from index). Err: %v, Result: %v", err, deleteResult)
+		return err
+	}
+	log.Debugf("Repo delete (delete chart files from index) result: %v", deleteResult)
 	return err
 }
 
@@ -360,7 +365,7 @@ func fetchAndImportIcon(dbClient *mongo.Client, c types.Chart) error {
 	//Update single icon
 	update := bson.M{"$set": bson.M{"raw_icon": b.Bytes()}}
 	//TODO kate check the filter format
-	filter := c.ID
+	filter := bson.M{"_id": c.ID}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update, options.Update())
 	log.Debugf("Chart icon import (update one) result: %v", updateResult)
 	if err != nil {
@@ -375,10 +380,12 @@ func fetchAndImportFiles(dbClient *mongo.Client, name string, r types.Repo, cv t
 	db, closer := Database(dbClient, dbName)
 	defer closer()
 
-	// Check if we already have indexed files for this chart version and digest
-	//collection := db.Collection(chartFilesCollection)
-	//TODO kate find chart file by ID and return if we already have it there
-	if err := db.C(chartFilesCollection).Find(bson.M{"_id": chartFilesID, "digest": cv.Digest}).One(&types.ChartFiles{}); err == nil {
+	//Check if we already have indexed files for this chart version and digest
+	collection := db.Collection(chartFilesCollection)
+	//TODO kate check if we can filter by type
+	filter := bson.M{"_id": chartFilesID, "digest": cv.Digest}
+	findResult := collection.FindOne(context.Background(), filter, options.FindOne())
+	if findResult.Decode(&types.ChartFiles{}) == mongo.ErrNoDocuments {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Debug("skipping existing files")
 		return nil
 	}
@@ -434,9 +441,10 @@ func fetchAndImportFiles(dbClient *mongo.Client, name string, r types.Repo, cv t
 
 	// inserts the chart files if not already indexed, or updates the existing
 	// entry if digest has changed
-	//collection := db.Collection(chartFilesCollection)
-	//TODO kate use InsertOne with upsert flag
-	db.C(chartFilesCollection).UpsertId(chartFilesID, chartFiles)
+	collection = db.Collection(chartFilesCollection)
+	filter = bson.M{"_id": chartFilesID}
+	//TODO kate check update format - BSON?
+	collection.UpdateOne(context.Background(), filter, types.ChartFiles{ID: chartFilesID, Repo: r, Digest: cv.Digest}, options.Update().SetUpsert(true))
 
 	return nil
 }
