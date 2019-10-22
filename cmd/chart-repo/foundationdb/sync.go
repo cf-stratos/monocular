@@ -23,6 +23,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -69,6 +70,16 @@ var SyncCmd = &cobra.Command{
 		} else {
 			log.Info("Successfully connected to FoundationDB document layer.")
 		}
+
+		log.Debug("Runnning a quick insert test...")
+		collection := client.Database("testing").Collection("numbers")
+		ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
+		res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
+		if err != nil {
+			log.Fatalf("Failed to insert document")
+		}
+		id := res.InsertedID
+		log.Debugf("Insert test successful: inserted doc with ID: %v", id)
 
 		authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
 		if err = syncRepo(client, fDB, args[0], args[1], authorizationHeader); err != nil {

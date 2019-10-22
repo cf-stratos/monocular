@@ -1,5 +1,6 @@
 Run cmd directly:
 
+
 go run ./cmd/chart-repo/chart_repo.go sync --foundation-url=mongodb://127.0.0.1:27016/test --debug=true stable https://kubernetes-charts.storage.googleapis.com
 
 

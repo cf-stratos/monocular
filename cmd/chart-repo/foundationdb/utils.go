@@ -93,15 +93,6 @@ func init() {
 // charts before fetching readmes for each chart and version pair.
 func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
 
-	// collection := client.Database("testing").Collection("numbers")
-	// ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
-	// res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
-	// if err != nil {
-	// 	log.Fatalf("Failed to insert document")
-	// }
-	// id := res.InsertedID
-	// log.Debugf("Inserted doc with ID: %v", id)
-
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
 		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
@@ -266,27 +257,43 @@ func newChart(entry helmrepo.ChartVersions, r types.Repo) types.Chart {
 }
 
 func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) error {
-	var pairs []interface{}
 	var chartIDs []string
+	var operations []mongo.WriteModel
+	operation := mongo.NewUpdateManyModel()
 	for _, c := range charts {
 		chartIDs = append(chartIDs, c.ID)
-		// charts to upsert - pair of selector, chart
-		pairs = append(pairs, bson.M{"_id": c.ID}, c)
+		// charts to upsert - pair of filter, chart
+		operation.SetFilter(bson.M{"_id": bson.M{
+			"$eq": c.ID,
+		},
+		})
+		updateDoc, err := bson.Marshal(c)
+		operation.SetUpdate(updateDoc)
+		operation.SetUpsert(true)
+		operations = append(operations, operation)
 	}
 
 	db, closer := Database(dbClient, dbName)
 	defer closer()
 
+	//Must use bulk write for array of filters
 	collection := db.Collection(chartCollection)
+	updateResult, err := collection.BulkWrite(
+		context.Background(),
+		operations,
+		options.BulkWrite(),
+	)
 
 	//Set upsert flag and upsert the pairs here
 	//Updates our index for charts that we already have and inserts charts that are new
-	updateResult, err := collection.UpdateMany(context.Background(), pairs, options.Update().SetUpsert(true))
+	//updateResult, err := collection.UpdateMany(context.Background(), pairs, options.Update()..SetUpsert(true))
 	log.Debugf("Chart import (upsert many) result: %v", updateResult)
 	if err != nil {
 		log.Errorf("Error occurred during chart import (upsert many). Err: %v, Result: %v", err, updateResult)
 		return err
 	}
+	log.Debugf("Upsert chart index success. %v documents upserted, %v documets modified", updateResult.UpsertedCount, updateResult.ModifiedCount)
+
 	//Remove from our index, any charts that no longer exist
 	filter := bson.M{
 		"_id": bson.M{
@@ -299,7 +306,7 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 		log.Errorf("Error occurred during chart import (delete many). Err: %v, Result: %v", err, deleteResult)
 		return err
 	}
-	log.Debugf("Chart import (delete many) result: %v", deleteResult)
+	log.Debugf("Delete stale charts from index success. %v documents deleted.", deleteResult.DeletedCount)
 
 	return err
 }

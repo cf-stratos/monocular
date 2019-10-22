@@ -1,4 +1,4 @@
-module testlocal/monocular
+module local/monocular
 
 go 1.12
 
@@ -17,7 +17,6 @@ require (
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gorilla/context v1.1.1
 	github.com/gorilla/mux v1.6.2
-	github.com/helm/monocular v1.9.0
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/jinzhu/copier v0.0.0-20180308034124-7e38e58719c3
@@ -41,10 +40,11 @@ require (
 	go.mongodb.org/mongo-driver v1.1.2
 	golang.org/x/crypto v0.0.0-20180904163835-0709b304e793
 	golang.org/x/image v0.0.0-20180926015637-991ec62608f3
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
 	golang.org/x/sys v0.0.0-20180928133829-e4b3c5e90611
 	golang.org/x/text v0.3.2 // indirect
 	gopkg.in/yaml.v2 v2.2.1
 	k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d
-	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/helm v2.13.1+incompatible
+	k8s.io/client-go v0.0.0-20180718001006-59698c7d9724
+	k8s.io/helm v2.11.0+incompatible
 )
