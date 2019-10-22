@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -39,12 +40,13 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/ghodss/yaml"
-	"github.com/globalsign/mgo/bson"
 	"github.com/jinzhu/copier"
 	log "github.com/sirupsen/logrus"
 	helmrepo "k8s.io/helm/pkg/repo"
 
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (
@@ -271,17 +273,28 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 	defer closer()
 
 	collection := db.Collection(chartCollection)
-	//TODO kate set upsert flag and insert the pairs here
-	//collection.InsertMany(ctx context.Context, documents []interface{}, opts ...*options.InsertManyOptions)
 
-	//TODO Kate Remove charts no longer existing in index
-	//collection.DeleteMany()
-	//bulk.RemoveAll(bson.M{
-	//	"_id": bson.M{
-	//		"$nin": chartIDs,
-	//	},
-	//	"repo.name": charts[0].Repo.Name,
-	//})
+	//Set upsert flag and upsert the pairs here
+	//Updates our index for charts that we already have and inserts charts that are new
+	updateResult, err := collection.UpdateMany(context.Background(), pairs, options.Update().SetUpsert(true))
+	log.Debugf("Chart import (upsert many) result: %v", updateResult)
+	if err != nil {
+		log.Errorf("Error occurred during chart import (upsert many). Err: %v, Result: %v", err, updateResult)
+		return err
+	}
+	//Remove from our index, any charts that no longer exist
+	filter := bson.M{
+		"_id": bson.M{
+			"$nin": chartIDs,
+		},
+		"repo.name": charts[0].Repo.Name,
+	}
+	deleteResult, err := collection.DeleteMany(context.Background(), filter, options.Delete())
+	if err != nil {
+		log.Errorf("Error occurred during chart import (delete many). Err: %v, Result: %v", err, deleteResult)
+		return err
+	}
+	log.Debugf("Chart import (delete many) result: %v", deleteResult)
 
 	return err
 }
@@ -342,10 +355,19 @@ func fetchAndImportIcon(dbClient *mongo.Client, c types.Chart) error {
 
 	db, closer := Database(dbClient, dbName)
 	defer closer()
-	//TODO Kate
-	//collection := db.Collection(chartCollection)
+
+	collection := db.Collection(chartCollection)
 	//Update single icon
-	return db.C(chartCollection).UpdateId(c.ID, bson.M{"$set": bson.M{"raw_icon": b.Bytes()}})
+	update := bson.M{"$set": bson.M{"raw_icon": b.Bytes()}}
+	//TODO kate check the filter format
+	filter := c.ID
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update, options.Update())
+	log.Debugf("Chart icon import (update one) result: %v", updateResult)
+	if err != nil {
+		log.Errorf("Error occurred during chart icon import (update one). Err: %v, Result: %v", err, updateResult)
+		return err
+	}
+	return err
 }
 
 func fetchAndImportFiles(dbClient *mongo.Client, name string, r types.Repo, cv types.ChartVersion) error {
