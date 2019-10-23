@@ -93,8 +93,9 @@ func init() {
 // charts before fetching readmes for each chart and version pair.
 func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
 
-	log.Debugf("TESTING ONLY!: Clearing out all charts and chart files")
-	db, _ := Database(dbClient, dbName)
+	log.Infof("TESTING ONLY!: Clearing out all charts and chart files")
+	db, closer := Database(dbClient, dbName)
+	defer closer()
 	collection := db.Collection(chartFilesCollection)
 	_, err := collection.DeleteMany(context.Background(), bson.M{}, options.Delete())
 	if err != nil {
@@ -107,7 +108,7 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 		log.Errorf("Error occurred clearing out charts Err: %v", err)
 		return err
 	}
-	log.Debugf("TESTING ONLY!: Clearing out all charts and chart files")
+	log.Infof("TESTING ONLY!: Clearing out all charts and chart files")
 
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
@@ -125,7 +126,7 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 	if len(charts) == 0 {
 		return errors.New("no charts in repository index")
 	}
-	err = importCharts(dbClient, dbName, charts)
+	err = importCharts(db, dbName, charts)
 	if err != nil {
 		return err
 	}
@@ -139,7 +140,7 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 	log.Debugf("starting %d workers", numWorkers)
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go importWorker(dbClient, &wg, iconJobs, chartFilesJobs)
+		go importWorker(db, &wg, iconJobs, chartFilesJobs)
 	}
 
 	// Enqueue jobs to process chart icons
@@ -178,7 +179,6 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 func deleteRepo(dbClient *mongo.Client, dbName, repoName string) error {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
-	//TODO kate use RemoveMany?
 	collection := db.Collection(chartCollection)
 	filter := bson.M{
 		"repo.name": repoName,
@@ -188,7 +188,7 @@ func deleteRepo(dbClient *mongo.Client, dbName, repoName string) error {
 		log.Errorf("Error occurred during delete repo (deleting charts from index). Err: %v, Result: %v", err, deleteResult)
 		return err
 	}
-	log.Debugf("Repo delete (delete charts from index) result: %v", deleteResult)
+	log.Debugf("Repo delete (delete charts from index) result: %v charts deleted", deleteResult.DeletedCount)
 
 	collection = db.Collection(chartFilesCollection)
 	deleteResult, err = collection.DeleteMany(context.Background(), filter, options.Delete())
@@ -196,7 +196,7 @@ func deleteRepo(dbClient *mongo.Client, dbName, repoName string) error {
 		log.Errorf("Error occurred during delete repo (deleting chart files from index). Err: %v, Result: %v", err, deleteResult)
 		return err
 	}
-	log.Debugf("Repo delete (delete chart files from index) result: %v", deleteResult)
+	log.Debugf("Repo delete (delete chart files from index) result: %v chart files deleted.", deleteResult.DeletedCount)
 	return err
 }
 
@@ -269,27 +269,19 @@ func newChart(entry helmrepo.ChartVersions, r types.Repo) types.Chart {
 	copier.Copy(&c.ChartVersions, entry)
 	c.Repo = r
 	c.ID = fmt.Sprintf("%s/%s", r.Name, c.Name)
-	//idString := fmt.Sprintf("%s/%s", r.Name, c.Name)
-	//hexID, err := primitive.ObjectIDFromHex(hex.EncodeToString([]byte(idString)))
-	//c.ID = hexID
-	//if err != nil {
-	//log.Errorf("Error encoding chart ID: %v to hex objectID.", idString, err)
-	//return types.Chart{}
-	//}
 	return c
 }
 
-func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) error {
+func importCharts(db *mongo.Database, dbName string, charts []types.Chart) error {
 	var operations []mongo.WriteModel
-	operation := mongo.NewReplaceOneModel()
+	operation := mongo.NewUpdateOneModel()
 	var chartIDs []string
 	for _, c := range charts {
 		chartIDs = append(chartIDs, c.ID)
 		// charts to upsert - pair of filter, chart
 		operation.SetFilter(bson.M{
 			"_id": c.ID,
-		},
-		)
+		})
 
 		chartBSON, err := bson.Marshal(&c)
 		var doc bson.M
@@ -300,20 +292,17 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 			log.Errorf("Error marshalling chart to BSON: %v. Skipping this chart.", err)
 		} else {
 			update := doc
-			operation.SetReplacement(update)
+			operation.SetUpdate(update)
 			operation.SetUpsert(true)
 			operations = append(operations, operation)
 		}
 	}
 
-	db, closer := Database(dbClient, dbName)
-	defer closer()
-
 	//Must use bulk write for array of filters
 	collection := db.Collection(chartCollection)
 	updateResult, err := collection.BulkWrite(
 		context.Background(),
-		operations[0:1],
+		operations,
 		options.BulkWrite(),
 	)
 
@@ -322,10 +311,10 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 	//updateResult, err := collection.UpdateMany(context.Background(), pairs, options.Update()..SetUpsert(true))
 	log.Debugf("Chart import (upsert many) result: %v", updateResult)
 	if err != nil {
-		log.Errorf("Error occurred during chart import (upsert many). %v, Err: %v, Result: %v", operations[0:1], err, updateResult)
+		log.Errorf("Error occurred during chart import (upsert many). Err: %v", err)
 		return err
 	}
-	log.Debugf("Upsert chart index success. %v documents upserted, %v documets modified", updateResult.UpsertedCount, updateResult.ModifiedCount)
+	log.Debugf("Upsert chart index success. %v documents inserted, %v documents upserted, %v documents modified", updateResult.InsertedCount, updateResult.UpsertedCount, updateResult.ModifiedCount)
 
 	//Remove from our index, any charts that no longer exist
 	filter := bson.M{
@@ -336,7 +325,7 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 	}
 	deleteResult, err := collection.DeleteMany(context.Background(), filter, options.Delete())
 	if err != nil {
-		log.Errorf("Error occurred during chart import (delete many). Err: %v, Result: %v", err, deleteResult)
+		log.Errorf("Error occurred during chart import (delete many). Err: %v", err)
 		return err
 	}
 	log.Debugf("Delete stale charts from index success. %v documents deleted.", deleteResult.DeletedCount)
@@ -344,23 +333,23 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 	return err
 }
 
-func importWorker(dbClient *mongo.Client, wg *sync.WaitGroup, icons <-chan types.Chart, chartFiles <-chan importChartFilesJob) {
+func importWorker(db *mongo.Database, wg *sync.WaitGroup, icons <-chan types.Chart, chartFiles <-chan importChartFilesJob) {
 	defer wg.Done()
 	for c := range icons {
 		log.WithFields(log.Fields{"name": c.Name}).Debug("importing icon")
-		if err := fetchAndImportIcon(dbClient, c); err != nil {
+		if err := fetchAndImportIcon(db, c); err != nil {
 			log.WithFields(log.Fields{"name": c.Name}).WithError(err).Error("failed to import icon")
 		}
 	}
 	for j := range chartFiles {
 		log.WithFields(log.Fields{"name": j.Name, "version": j.ChartVersion.Version}).Debug("importing readme and values")
-		if err := fetchAndImportFiles(dbClient, j.Name, j.Repo, j.ChartVersion); err != nil {
+		if err := fetchAndImportFiles(db, j.Name, j.Repo, j.ChartVersion); err != nil {
 			log.WithFields(log.Fields{"name": j.Name, "version": j.ChartVersion.Version}).WithError(err).Error("failed to import files")
 		}
 	}
 }
 
-func fetchAndImportIcon(dbClient *mongo.Client, c types.Chart) error {
+func fetchAndImportIcon(db *mongo.Database, c types.Chart) error {
 	if c.Icon == "" {
 		log.WithFields(log.Fields{"name": c.Name}).Info("icon not found")
 		return nil
@@ -398,13 +387,9 @@ func fetchAndImportIcon(dbClient *mongo.Client, c types.Chart) error {
 	var b bytes.Buffer
 	imaging.Encode(&b, icon, imaging.PNG)
 
-	db, closer := Database(dbClient, dbName)
-	defer closer()
-
 	collection := db.Collection(chartCollection)
 	//Update single icon
 	update := bson.M{"$set": bson.M{"raw_icon": b.Bytes()}}
-	//TODO kate check the filter format
 	filter := bson.M{"_id": c.ID}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update, options.Update())
 	log.Debugf("Chart icon import (update one) result: %v", updateResult)
@@ -415,21 +400,14 @@ func fetchAndImportIcon(dbClient *mongo.Client, c types.Chart) error {
 	return err
 }
 
-func fetchAndImportFiles(dbClient *mongo.Client, name string, r types.Repo, cv types.ChartVersion) error {
+func fetchAndImportFiles(db *mongo.Database, name string, r types.Repo, cv types.ChartVersion) error {
 
 	chartFilesID := fmt.Sprintf("%s/%s-%s", r.Name, name, cv.Version)
-	//chartFilesIDString := fmt.Sprintf("%s/%s-%s", r.Name, name, cv.Version)
-	//hexID, err := primitive.ObjectIDFromHex(hex.EncodeToString([]byte(chartFilesIDString)))
-	//chartFilesID := hexID
-	db, closer := Database(dbClient, dbName)
-	defer closer()
-
 	//Check if we already have indexed files for this chart version and digest
 	collection := db.Collection(chartFilesCollection)
-	//TODO kate check if we can filter by type
 	filter := bson.M{"_id": chartFilesID, "digest": cv.Digest}
 	findResult := collection.FindOne(context.Background(), filter, options.FindOne())
-	if findResult.Decode(&types.ChartFiles{}) == mongo.ErrNoDocuments {
+	if findResult.Decode(&types.ChartFiles{}) != mongo.ErrNoDocuments {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Debug("skipping existing files")
 		return nil
 	}
@@ -487,7 +465,6 @@ func fetchAndImportFiles(dbClient *mongo.Client, name string, r types.Repo, cv t
 	// entry if digest has changed
 	collection = db.Collection(chartFilesCollection)
 	filter = bson.M{"_id": chartFilesID}
-	//TODO kate check update format - BSON?
 	collection.UpdateOne(context.Background(), filter, types.ChartFiles{ID: chartFilesID, Repo: r, Digest: cv.Digest}, options.Update().SetUpsert(true))
 
 	return nil

@@ -48,11 +48,6 @@ var SyncCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		// fdbUser, err := cmd.Flags().GetString("fdb-user")
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		// fdbPW := os.Getenv("FDB_PASSWORD")
 		debug, err := cmd.Flags().GetBool("debug")
 		if err != nil {
 			log.Fatal(err)
