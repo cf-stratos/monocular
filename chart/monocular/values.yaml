@@ -143,7 +143,7 @@ ingress:
   #   secretName: monocular.local-tls
 
 mongodb:
-  enabled: true
+  enabled: false
   persistence:
     enabled: false
 
@@ -152,7 +152,7 @@ mongodb:
 # `mongodb://${MONGODB_USER}:${MONGODB_ROOT_PASSWORD}@${MONGODB_DNS}:${MONGODB_PORT}/${MONGODB_DATABASE}`
 # ref: https://docs.mongodb.com/manual/reference/connection-string/
 global:
-  mongoUrl:
+  mongoUrl: mongodb://fdb-service:27016/test
   
 # This parameter will allow to set  securityContext: { "runAsUser": 1001} by example
 # this is usefull to set a user different to 0 (root) 
