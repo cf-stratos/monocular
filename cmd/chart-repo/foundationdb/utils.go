@@ -45,7 +45,6 @@ import (
 	helmrepo "k8s.io/helm/pkg/repo"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -93,6 +92,22 @@ func init() {
 // imported into the database as fast as possible. E.g. we want all icons for
 // charts before fetching readmes for each chart and version pair.
 func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
+
+	log.Debugf("TESTING ONLY!: Clearing out all charts and chart files")
+	db, _ := Database(dbClient, dbName)
+	collection := db.Collection(chartFilesCollection)
+	_, err := collection.DeleteMany(context.Background(), bson.M{}, options.Delete())
+	if err != nil {
+		log.Errorf("Error occurred clearing out chart files Err: %v", err)
+		return err
+	}
+	collection = db.Collection(chartCollection)
+	_, err = collection.DeleteMany(context.Background(), bson.M{}, options.Delete())
+	if err != nil {
+		log.Errorf("Error occurred clearing out charts Err: %v", err)
+		return err
+	}
+	log.Debugf("TESTING ONLY!: Clearing out all charts and chart files")
 
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
@@ -254,31 +269,38 @@ func newChart(entry helmrepo.ChartVersions, r types.Repo) types.Chart {
 	copier.Copy(&c.ChartVersions, entry)
 	c.Repo = r
 	c.ID = fmt.Sprintf("%s/%s", r.Name, c.Name)
+	//idString := fmt.Sprintf("%s/%s", r.Name, c.Name)
+	//hexID, err := primitive.ObjectIDFromHex(hex.EncodeToString([]byte(idString)))
+	//c.ID = hexID
+	//if err != nil {
+	//log.Errorf("Error encoding chart ID: %v to hex objectID.", idString, err)
+	//return types.Chart{}
+	//}
 	return c
 }
 
 func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) error {
 	var operations []mongo.WriteModel
-	operation := mongo.NewUpdateManyModel()
-	var chartIDs []primitive.ObjectID
+	operation := mongo.NewReplaceOneModel()
+	var chartIDs []string
 	for _, c := range charts {
 		chartIDs = append(chartIDs, c.ID)
 		// charts to upsert - pair of filter, chart
-		operation.SetFilter(bson.M{"_id": bson.M{
-			"$eq": c.ID,
+		operation.SetFilter(bson.M{
+			"_id": c.ID,
 		},
-		})
-		//log.Infof("CHART: %v", c)
+		)
 
-		chartBSON, err := bson.Marshal(c)
-		log.Infof("CHART BSON: %v", chartBSON)
+		chartBSON, err := bson.Marshal(&c)
+		var doc bson.M
+		bson.Unmarshal(chartBSON, &doc)
+		delete(doc, "_id")
 
 		if err != nil {
 			log.Errorf("Error marshalling chart to BSON: %v. Skipping this chart.", err)
 		} else {
-			update := bson.D{{"$set", chartBSON}}
-			//log.Infof("UPDATE BSON: %v", update)
-			operation.SetUpdate(update)
+			update := doc
+			operation.SetReplacement(update)
 			operation.SetUpsert(true)
 			operations = append(operations, operation)
 		}
@@ -291,7 +313,7 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 	collection := db.Collection(chartCollection)
 	updateResult, err := collection.BulkWrite(
 		context.Background(),
-		operations,
+		operations[0:1],
 		options.BulkWrite(),
 	)
 
@@ -300,7 +322,7 @@ func importCharts(dbClient *mongo.Client, dbName string, charts []types.Chart) e
 	//updateResult, err := collection.UpdateMany(context.Background(), pairs, options.Update()..SetUpsert(true))
 	log.Debugf("Chart import (upsert many) result: %v", updateResult)
 	if err != nil {
-		log.Errorf("Error occurred during chart import (upsert many). Err: %v, Result: %v", err, updateResult)
+		log.Errorf("Error occurred during chart import (upsert many). %v, Err: %v, Result: %v", operations[0:1], err, updateResult)
 		return err
 	}
 	log.Debugf("Upsert chart index success. %v documents upserted, %v documets modified", updateResult.UpsertedCount, updateResult.ModifiedCount)
@@ -394,7 +416,11 @@ func fetchAndImportIcon(dbClient *mongo.Client, c types.Chart) error {
 }
 
 func fetchAndImportFiles(dbClient *mongo.Client, name string, r types.Repo, cv types.ChartVersion) error {
+
 	chartFilesID := fmt.Sprintf("%s/%s-%s", r.Name, name, cv.Version)
+	//chartFilesIDString := fmt.Sprintf("%s/%s-%s", r.Name, name, cv.Version)
+	//hexID, err := primitive.ObjectIDFromHex(hex.EncodeToString([]byte(chartFilesIDString)))
+	//chartFilesID := hexID
 	db, closer := Database(dbClient, dbName)
 	defer closer()
 
