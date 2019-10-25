@@ -21,14 +21,15 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"local/monocular/cmd/chartsvc/models"
 
-	"github.com/globalsign/mgo/bson"
 	"github.com/gorilla/mux"
 	"github.com/kubeapps/common/response"
 	log "github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -131,55 +132,69 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	log.Info("Request for charts..")
 	db, closer := Database(dbClient, dbName)
 	defer closer()
-	var charts []*models.Chart
 
-	c := db.Collection(chartCollection)
-	pipeline := []bson.M{}
+	//Find all charts for repo name and sort by chart name
+	collection := db.Collection(chartCollection)
+	filter := bson.M{}
 	if repo != "" {
-		// 1 match the repo name
-		pipeline = append(pipeline, bson.M{"$match": bson.M{"repo.name": repo}})
+		filter = bson.M{"repo.name": repo}
+	}
+	resultCursor, err := collection.Find(context.Background(), filter, options.Find())
+	if err != nil {
+		log.WithError(err).Errorf(
+			"Error fetching charts from DB for pagination %s",
+			repo,
+		)
+		return newChartListResponse([]*models.Chart{}), meta{0}, err
+	}
+	var tempChartMap map[string]*models.Chart = make(map[string]*models.Chart)
+
+	for resultCursor.Next(context.Background()) {
+		chart := models.Chart{}
+
+		// Decode the document
+		if err := resultCursor.Decode(&chart); err != nil {
+			log.WithError(err).Errorf(
+				"Error decoding a chart from DB for pagination, from repo %s. Skipping this chart.",
+				repo,
+			)
+			continue
+		}
+		// Add to a temporary map with the Digest of the latest version
+		// Adding to the map removes duplicates
+		tempChartMap[chart.ChartVersions[0].Digest] = &chart
 	}
 
-	// We should query unique charts
-	pipeline = append(pipeline,
-		// 2 Add a new field to store the latest version
-		bson.M{"$addFields": bson.M{"firstChartVersion": bson.M{"$arrayElemAt": []interface{}{"$chartversions", 0}}}},
-		// 3 Group by unique digest for the latest version (remove duplicates)
-		bson.M{"$group": bson.M{"_id": "$firstChartVersion.digest", "chart": bson.M{"$first": "$$ROOT"}}},
-		// 4 Restore original object struct
-		bson.M{"$replaceRoot": bson.M{"newRoot": "$chart"}},
-		// 5 Order by name
-		bson.M{"$sort": bson.M{"name": 1}},
-	)
+	//Now just get all the values from our map
+	uniqueCharts := make([]*models.Chart, 0, len(tempChartMap))
+	for _, v := range uniqueCharts {
+		uniqueCharts = append(uniqueCharts, v)
+	}
 
+	//Sort the list of paginated charts by name
+	sort.Slice(uniqueCharts, func(i, j int) bool {
+		return uniqueCharts[i].Name < uniqueCharts[j].Name
+	})
+
+	sortedCharts := uniqueCharts
+	var paginatedCharts []*models.Chart
 	totalPages := 1
 	if pageSize != 0 {
 		// If a pageSize is given, returns only the the specified number of charts and
 		// the number of pages
-		countPipeline := append(pipeline, bson.M{"$count": "count"})
 		cc := count{}
-		err := c.Pipe(countPipeline).One(&cc)
-		if err != nil {
-			return apiListResponse{}, 0, err
-		}
+		cc.Count = len(sortedCharts)
 		totalPages = int(math.Ceil(float64(cc.Count) / float64(pageSize)))
 
 		// If the page number is out of range, return the last one
 		if pageNumber > totalPages {
 			pageNumber = totalPages
 		}
+		paginatedCharts = sortedCharts[(pageNumber-1)*pageSize : pageNumber*pageSize]
+	}
 
-		pipeline = append(pipeline,
-			bson.M{"$skip": pageSize * (pageNumber - 1)},
-			bson.M{"$limit": pageSize},
-		)
-	}
-	err := c.Pipe(pipeline).All(&charts)
-	if err != nil {
-		return apiListResponse{}, 0, err
-	}
 	log.Info("Done.")
-	return newChartListResponse(charts), meta{totalPages}, nil
+	return newChartListResponse(paginatedCharts), meta{totalPages}, nil
 }
 
 // listCharts returns a list of charts
