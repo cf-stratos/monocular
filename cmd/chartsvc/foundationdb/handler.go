@@ -197,7 +197,7 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	return newChartListResponse(paginatedCharts), meta{totalPages}, nil
 }
 
-// listCharts returns a list of charts
+// ListCharts returns a list of charts
 func ListCharts(w http.ResponseWriter, req *http.Request) {
 	log.Info("Request for charts..")
 	pageNumber, pageSize := getPageNumberAndSize(req)
@@ -211,7 +211,7 @@ func ListCharts(w http.ResponseWriter, req *http.Request) {
 	log.Info("Done.")
 }
 
-// listRepoCharts returns a list of charts in the given repo
+// ListRepoCharts returns a list of charts in the given repo
 func ListRepoCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	log.Info("Request for charts..")
 	pageNumber, pageSize := getPageNumberAndSize(req)
@@ -225,7 +225,7 @@ func ListRepoCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	log.Info("Done.")
 }
 
-// getChart returns the chart from the given repo
+// GetChart returns the chart from the given repo
 func GetChart(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
@@ -245,7 +245,7 @@ func GetChart(w http.ResponseWriter, req *http.Request, params Params) {
 	response.NewDataResponse(cr).Write(w)
 }
 
-// listChartVersions returns a list of chart versions for the given chart
+// ListChartVersions returns a list of chart versions for the given chart
 func ListChartVersions(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
@@ -265,7 +265,7 @@ func ListChartVersions(w http.ResponseWriter, req *http.Request, params Params) 
 	response.NewDataResponse(cvl).Write(w)
 }
 
-// getChartVersion returns the given chart version
+// GetChartVersion returns the given chart version
 func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
@@ -288,11 +288,14 @@ func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 		return
 	}
 
+	//TODO kate - cannot use the positional operator on chart versions, so here cut the versions array
+	// down to just the one specified in params["version"]
+
 	cvr := newChartVersionResponse(&chart, chart.ChartVersions[0])
 	response.NewDataResponse(cvr).Write(w)
 }
 
-// getChartIcon returns the icon for a given chart
+// GetChartIcon returns the icon for a given chart
 func GetChartIcon(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
@@ -315,7 +318,7 @@ func GetChartIcon(w http.ResponseWriter, req *http.Request, params Params) {
 	w.Write(chart.RawIcon)
 }
 
-// getChartVersionReadme returns the README for a given chart
+// GetChartVersionReadme returns the README for a given chart
 func GetChartVersionReadme(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
@@ -339,7 +342,7 @@ func GetChartVersionReadme(w http.ResponseWriter, req *http.Request, params Para
 	w.Write(readme)
 }
 
-// getChartVersionValues returns the values.yaml for a given chart
+// GetChartVersionValues returns the values.yaml for a given chart
 func GetChartVersionValues(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
@@ -358,7 +361,7 @@ func GetChartVersionValues(w http.ResponseWriter, req *http.Request, params Para
 	w.Write([]byte(files.Values))
 }
 
-// listChartsWithFilters returns the list of repos that contains the given chart and the latest version found
+// ListChartsWithFilters returns the list of repos that contains the given chart and the latest version found
 func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := Database(dbClient, dbName)
 	defer closer()
@@ -397,7 +400,7 @@ func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Para
 	response.NewDataResponse(cl).Write(w)
 }
 
-// searchCharts returns the list of charts that matches the query param in any of these fields:
+// SearchCharts returns the list of charts that matches the query param in any of these fields:
 //  - name
 //  - description
 //  - repository name
