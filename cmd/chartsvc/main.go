@@ -17,19 +17,27 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/kubeapps/common/datastore"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/negroni"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
+
+	fdb "local/monocular/cmd/chartsvc/foundationdb"
 )
 
 const pathPrefix = "/v1"
 
+var client *mongo.Client
 var dbSession datastore.Session
 
 func setupRoutes() http.Handler {
@@ -42,17 +50,17 @@ func setupRoutes() http.Handler {
 
 	// Routes
 	apiv1 := r.PathPrefix(pathPrefix).Subrouter()
-	apiv1.Methods("GET").Path("/charts").Queries("name", "{chartName}", "version", "{version}", "appversion", "{appversion}").Handler(WithParams(listChartsWithFilters))
-	apiv1.Methods("GET").Path("/charts").HandlerFunc(listCharts)
-	apiv1.Methods("GET").Path("/charts/search").Queries("q", "{query}").Handler(WithParams(searchCharts))
-	apiv1.Methods("GET").Path("/charts/{repo}").Handler(WithParams(listRepoCharts))
-	apiv1.Methods("GET").Path("/charts/{repo}/search").Queries("q", "{query}").Handler(WithParams(searchCharts))
-	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}").Handler(WithParams(getChart))
-	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions").Handler(WithParams(listChartVersions))
-	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions/{version}").Handler(WithParams(getChartVersion))
-	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/logo-160x160-fit.png").Handler(WithParams(getChartIcon))
-	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/README.md").Handler(WithParams(getChartVersionReadme))
-	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/values.yaml").Handler(WithParams(getChartVersionValues))
+	apiv1.Methods("GET").Path("/charts").Queries("name", "{chartName}", "version", "{version}", "appversion", "{appversion}").Handler(fdb.WithParams(fdb.ListChartsWithFilters))
+	apiv1.Methods("GET").Path("/charts").HandlerFunc(fdb.ListCharts)
+	apiv1.Methods("GET").Path("/charts/search").Queries("q", "{query}").Handler(fdb.WithParams(fdb.SearchCharts))
+	apiv1.Methods("GET").Path("/charts/{repo}").Handler(fdb.WithParams(fdb.ListRepoCharts))
+	apiv1.Methods("GET").Path("/charts/{repo}/search").Queries("q", "{query}").Handler(fdb.WithParams(fdb.SearchCharts))
+	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}").Handler(fdb.WithParams(fdb.GetChart))
+	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions").Handler(fdb.WithParams(fdb.ListChartVersions))
+	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions/{version}").Handler(fdb.WithParams(fdb.GetChartVersion))
+	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/logo-160x160-fit.png").Handler(fdb.WithParams(fdb.GetChartIcon))
+	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/README.md").Handler(fdb.WithParams(fdb.GetChartVersionReadme))
+	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/values.yaml").Handler(fdb.WithParams(fdb.GetChartVersionValues))
 
 	n := negroni.Classic()
 	n.UseHandler(r)
@@ -60,18 +68,49 @@ func setupRoutes() http.Handler {
 }
 
 func main() {
-	dbURL := flag.String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-	dbName := flag.String("mongo-database", "charts", "MongoDB database")
-	dbUsername := flag.String("mongo-user", "", "MongoDB user")
-	dbPassword := os.Getenv("MONGO_PASSWORD")
-	flag.Parse()
+	// dbURL := flag.String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
+	// log.Debugf("Mongo DB connnection: %v %v %v")
+	// dbName := flag.String("mongo-database", "charts", "MongoDB database")
+	// dbUsername := flag.String("mongo-user", "", "MongoDB user")
+	// dbPassword := os.Getenv("MONGO_PASSWORD")
+	// flag.Parse()
 
-	mongoConfig := datastore.Config{URL: *dbURL, Database: *dbName, Username: *dbUsername, Password: dbPassword}
-	var err error
-	dbSession, err = datastore.NewSession(mongoConfig)
-	if err != nil {
-		log.WithFields(log.Fields{"host": *dbURL}).Fatal(err)
+	// log.Infof("Mongo DB connnection: %v %v %v %v", *dbURL, *dbName, *dbUsername, dbPassword)
+	// mongoConfig := datastore.Config{URL: *dbURL, Database: *dbName, Username: *dbUsername, Password: dbPassword}
+	// var err error
+	// dbSession, err = datastore.NewSession(mongoConfig)
+	// if err != nil {
+	// 	log.WithFields(log.Fields{"host": *dbURL}).Fatal(err)
+	// }
+
+	fdbURL := flag.String("mongo-url", "mongodb://fdb-service/27016", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
+	fDB := flag.String("mongo-database", "charts", "MongoDB database")
+	debug := flag.Bool("debug", true, "Debug Logging")
+	flag.Parse()
+	if *debug {
+		log.SetLevel(log.DebugLevel)
 	}
+	log.Infof("Attempting to connect to FDB: %v, %v, %v", fdbURL, fDB, debug)
+
+	clientOptions := options.Client().ApplyURI(*fdbURL)
+	client, err := mongo.Connect(context.TODO(), clientOptions)
+	if err != nil {
+		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
+		return
+	} else {
+		log.Infof("Connection created Attempting to ping foundation db...")
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
+		return
+	} else {
+		log.Info("Successfully connected to FoundationDB document layer.")
+	}
+
+	fdb.InitDBConfig(client, *fDB)
+	fdb.SetPathPrefix(pathPrefix)
 
 	n := setupRoutes()
 

@@ -1,5 +1,5 @@
 IMAGE_REPO ?= quay.io/helmpack/chartsvc
-IMAGE_TAG ?= latest
+IMAGE_TAG ?= kate25101205
 
 docker-build:
 	# We use the context of the root dir

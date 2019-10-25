@@ -1,6 +1,7 @@
 FROM golang:1.11 as builder
 COPY . /go/src/github.com/helm/monocular
 WORKDIR /go/src/github.com/helm/monocular
+ENV GO111MODULE=on
 RUN CGO_ENABLED=0 go build -a -installsuffix cgo ./cmd/chartsvc
 
 FROM scratch

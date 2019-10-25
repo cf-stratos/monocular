@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package mongodb
 
 import (
 	"fmt"
@@ -112,6 +112,7 @@ func uniqChartList(charts []*models.Chart) []*models.Chart {
 }
 
 func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListResponse, interface{}, error) {
+	log.Info("Request for charts..")
 	db, closer := dbSession.DB()
 	defer closer()
 	var charts []*models.Chart
@@ -160,12 +161,13 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	if err != nil {
 		return apiListResponse{}, 0, err
 	}
-
+	log.Info("Done.")
 	return newChartListResponse(charts), meta{totalPages}, nil
 }
 
 // listCharts returns a list of charts
-func listCharts(w http.ResponseWriter, req *http.Request) {
+func ListCharts(w http.ResponseWriter, req *http.Request) {
+	log.Info("Request for charts..")
 	pageNumber, pageSize := getPageNumberAndSize(req)
 	cl, meta, err := getPaginatedChartList("", pageNumber, pageSize)
 	if err != nil {
@@ -174,10 +176,12 @@ func listCharts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	response.NewDataResponseWithMeta(cl, meta).Write(w)
+	log.Info("Done.")
 }
 
 // listRepoCharts returns a list of charts in the given repo
-func listRepoCharts(w http.ResponseWriter, req *http.Request, params Params) {
+func ListRepoCharts(w http.ResponseWriter, req *http.Request, params Params) {
+	log.Info("Request for charts..")
 	pageNumber, pageSize := getPageNumberAndSize(req)
 	cl, meta, err := getPaginatedChartList(params["repo"], pageNumber, pageSize)
 	if err != nil {
@@ -186,10 +190,11 @@ func listRepoCharts(w http.ResponseWriter, req *http.Request, params Params) {
 		return
 	}
 	response.NewDataResponseWithMeta(cl, meta).Write(w)
+	log.Info("Done.")
 }
 
 // getChart returns the chart from the given repo
-func getChart(w http.ResponseWriter, req *http.Request, params Params) {
+func GetChart(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := dbSession.DB()
 	defer closer()
 	var chart models.Chart
@@ -205,7 +210,7 @@ func getChart(w http.ResponseWriter, req *http.Request, params Params) {
 }
 
 // listChartVersions returns a list of chart versions for the given chart
-func listChartVersions(w http.ResponseWriter, req *http.Request, params Params) {
+func ListChartVersions(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := dbSession.DB()
 	defer closer()
 	var chart models.Chart
@@ -221,7 +226,7 @@ func listChartVersions(w http.ResponseWriter, req *http.Request, params Params) 
 }
 
 // getChartVersion returns the given chart version
-func getChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
+func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := dbSession.DB()
 	defer closer()
 	var chart models.Chart
@@ -243,7 +248,7 @@ func getChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 }
 
 // getChartIcon returns the icon for a given chart
-func getChartIcon(w http.ResponseWriter, req *http.Request, params Params) {
+func GetChartIcon(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := dbSession.DB()
 	defer closer()
 	var chart models.Chart
@@ -263,7 +268,7 @@ func getChartIcon(w http.ResponseWriter, req *http.Request, params Params) {
 }
 
 // getChartVersionReadme returns the README for a given chart
-func getChartVersionReadme(w http.ResponseWriter, req *http.Request, params Params) {
+func GetChartVersionReadme(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := dbSession.DB()
 	defer closer()
 	var files models.ChartFiles
@@ -283,7 +288,7 @@ func getChartVersionReadme(w http.ResponseWriter, req *http.Request, params Para
 }
 
 // getChartVersionValues returns the values.yaml for a given chart
-func getChartVersionValues(w http.ResponseWriter, req *http.Request, params Params) {
+func GetChartVersionValues(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := dbSession.DB()
 	defer closer()
 	var files models.ChartFiles
@@ -329,7 +334,7 @@ func listChartsWithFilters(w http.ResponseWriter, req *http.Request, params Para
 //  - any keyword
 //  - any source
 //  - any maintainer name
-func searchCharts(w http.ResponseWriter, req *http.Request, params Params) {
+func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := dbSession.DB()
 	defer closer()
 
