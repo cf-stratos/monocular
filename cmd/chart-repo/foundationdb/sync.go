@@ -21,9 +21,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -40,11 +40,11 @@ var SyncCmd = &cobra.Command{
 			return
 		}
 
-		fdbURL, err := cmd.Flags().GetString("foundation-url")
+		fdbURL, err := cmd.Flags().GetString("mongo-url")
 		if err != nil {
 			log.Fatal(err)
 		}
-		fDB, err := cmd.Flags().GetString("doclayer-database")
+		fDB, err := cmd.Flags().GetString("mongo-database")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -56,29 +56,28 @@ var SyncCmd = &cobra.Command{
 			log.SetLevel(log.DebugLevel)
 		}
 
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-		client, err := mongo.Connect(ctx, options.Client().ApplyURI(fdbURL))
-		ctx, _ = context.WithTimeout(context.Background(), 2*time.Second)
+		logrus.Infof("Attempting to connect to FDB: %v, %v, %v", fdbURL, fDB, debug)
+		//ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		clientOptions := options.Client().ApplyURI(fdbURL)
+		client, err := mongo.Connect(context.TODO(), clientOptions)
+		if err != nil {
+			log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
+			return
+		} else {
+			log.Infof("Connection created Attempting to ping foundation db...")
+		}
+		ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 		err = client.Ping(ctx, readpref.Primary())
 		if err != nil {
 			log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
+			return
 		} else {
 			log.Info("Successfully connected to FoundationDB document layer.")
 		}
-
-		log.Debug("Runnning a quick insert test...")
-		collection := client.Database("testing").Collection("numbers")
-		ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
-		res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
-		if err != nil {
-			log.Fatalf("Failed to insert document")
-		}
-		id := res.InsertedID
-		log.Debugf("Insert test successful: inserted doc with ID: %v", id)
-
 		authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
 		if err = syncRepo(client, fDB, args[0], args[1], authorizationHeader); err != nil {
 			log.Fatalf("Can't add chart repository to database: %v", err)
+			return
 		}
 
 		log.Infof("Successfully added the chart repository %s to database", args[0])

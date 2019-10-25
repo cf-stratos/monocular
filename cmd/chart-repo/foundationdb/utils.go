@@ -93,11 +93,23 @@ func init() {
 // charts before fetching readmes for each chart and version pair.
 func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
 
-	log.Infof("TESTING ONLY!: Clearing out all charts and chart files")
 	db, closer := Database(dbClient, dbName)
 	defer closer()
-	collection := db.Collection(chartFilesCollection)
-	_, err := collection.DeleteMany(context.Background(), bson.M{}, options.Delete())
+
+	log.Infof("Running a quick insert test...")
+	collection := db.Collection("numbers")
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
+	if err != nil {
+		log.Fatalf("Failed to insert document: %v", err)
+		return err
+	}
+	id := res.InsertedID
+	log.Debugf("Insert test successful: inserted doc with ID: %v", id)
+
+	log.Infof("TESTING ONLY!: Clearing out all charts and chart files")
+	collection = db.Collection(chartFilesCollection)
+	_, err = collection.DeleteMany(context.Background(), bson.M{}, options.Delete())
 	if err != nil {
 		log.Errorf("Error occurred clearing out chart files Err: %v", err)
 		return err
@@ -126,6 +138,8 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 	if len(charts) == 0 {
 		return errors.New("no charts in repository index")
 	}
+	//TODO Kate REMOVE!
+	charts = charts[0:2]
 	err = importCharts(db, dbName, charts)
 	if err != nil {
 		return err
@@ -457,16 +471,28 @@ func fetchAndImportFiles(db *mongo.Database, name string, r types.Repo, cv types
 	}
 	if v, ok := files[valuesFileName]; ok {
 		chartFiles.Values = v
+		log.Debugf("CHart values: %v", v)
 	} else {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Info("values.yaml not found")
 	}
 
 	// inserts the chart files if not already indexed, or updates the existing
 	// entry if digest has changed
+	log.Debugf("Inserting file %v to collection: %v....", chartFilesID, chartFilesCollection)
 	collection = db.Collection(chartFilesCollection)
 	filter = bson.M{"_id": chartFilesID}
-	collection.UpdateOne(context.Background(), filter, types.ChartFiles{ID: chartFilesID, Repo: r, Digest: cv.Digest}, options.Update().SetUpsert(true))
-
+	chartBSON, err := bson.Marshal(&chartFiles)
+	var doc bson.M
+	bson.Unmarshal(chartBSON, &doc)
+	delete(doc, "_id")
+	update := bson.M{"$set": doc}
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update, options.Update().SetUpsert(true))
+	if err != nil {
+		log.Errorf("Error occurred during chart files import (update one). Err: %v, Result: %v", err)
+		return err
+	}
+	log.Debugf("Chart files import (update one) upserted: %v updated: %v", updateResult.UpsertedCount, updateResult.ModifiedCount)
+	log.Debugf("Insert success.")
 	return nil
 }
 
