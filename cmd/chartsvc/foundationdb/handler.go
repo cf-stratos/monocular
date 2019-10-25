@@ -136,18 +136,19 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	c := db.Collection(chartCollection)
 	pipeline := []bson.M{}
 	if repo != "" {
+		// 1 match the repo name
 		pipeline = append(pipeline, bson.M{"$match": bson.M{"repo.name": repo}})
 	}
 
 	// We should query unique charts
 	pipeline = append(pipeline,
-		// Add a new field to store the latest version
+		// 2 Add a new field to store the latest version
 		bson.M{"$addFields": bson.M{"firstChartVersion": bson.M{"$arrayElemAt": []interface{}{"$chartversions", 0}}}},
-		// Group by unique digest for the latest version (remove duplicates)
+		// 3 Group by unique digest for the latest version (remove duplicates)
 		bson.M{"$group": bson.M{"_id": "$firstChartVersion.digest", "chart": bson.M{"$first": "$$ROOT"}}},
-		// Restore original object struct
+		// 4 Restore original object struct
 		bson.M{"$replaceRoot": bson.M{"newRoot": "$chart"}},
-		// Order by name
+		// 5 Order by name
 		bson.M{"$sort": bson.M{"name": 1}},
 	)
 
@@ -359,16 +360,22 @@ func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Para
 		"name": 1, "repo": 1,
 		"chartversions": bson.M{"$slice": 1},
 	}
-	findResult, err := chartCollection.Find(context.Background(), filter, options.FindOne().SetProjection(projection))
+	resultCursor, err := chartCollection.Find(context.Background(), filter, options.Find().SetProjection(projection))
 	if err == nil {
-		//TODO Kate cursor here + read into charts
-		findResult.
+		err = resultCursor.All(context.Background(), &charts)
+		if err != nil {
+			log.WithError(err).Errorf(
+				"Error decoding charts from DB with the given name %s, version %s and appversion %s",
+				params["chartName"], req.FormValue("version"), req.FormValue("appversion"),
+			)
+			// continue to return empty list
+		}
 	} else {
 		log.WithError(err).Errorf(
 			"could not find charts with the given name %s, version %s and appversion %s",
 			params["chartName"], req.FormValue("version"), req.FormValue("appversion"),
 		)
-		// continue to return empty list		
+		// continue to return empty list
 	}
 
 	cl := newChartListResponse(uniqChartList(charts))
@@ -387,7 +394,9 @@ func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	defer closer()
 	query := req.FormValue("q")
 	var charts []*models.Chart
-	conditions := bson.M{
+
+	chartCollection := db.Collection(chartCollection)
+	filter := bson.M{
 		"$or": []bson.M{
 			{"name": bson.M{"$regex": query}},
 			{"description": bson.M{"$regex": query}},
@@ -398,9 +407,19 @@ func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 		},
 	}
 	if params["repo"] != "" {
-		conditions["repo.name"] = params["repo"]
+		filter["repo.name"] = params["repo"]
 	}
-	if err := db.C(chartCollection).Find(conditions).All(&charts); err != nil {
+	resultCursor, err := chartCollection.Find(context.Background(), filter, options.Find())
+	if err == nil {
+		err = resultCursor.All(context.Background(), &charts)
+		if err != nil {
+			log.WithError(err).Errorf(
+				"Error decoding charts from DB with the given query %s",
+				query,
+			)
+			// continue to return empty list
+		}
+	} else {
 		log.WithError(err).Errorf(
 			"could not find charts with the given query %s",
 			query,
