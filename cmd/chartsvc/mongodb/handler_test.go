@@ -256,7 +256,7 @@ func Test_listCharts(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest("GET", "/charts"+tt.query, nil)
-			listCharts(w, req)
+			ListCharts(w, req)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, http.StatusOK, w.Code)
@@ -323,7 +323,7 @@ func Test_listRepoCharts(t *testing.T) {
 				"repo": "my-repo",
 			}
 
-			listRepoCharts(w, req, params)
+			ListRepoCharts(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, http.StatusOK, w.Code)
@@ -390,7 +390,7 @@ func Test_getChart(t *testing.T) {
 				"chartName": parts[1],
 			}
 
-			getChart(w, req, params)
+			GetChart(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
@@ -454,7 +454,7 @@ func Test_listChartVersions(t *testing.T) {
 				"chartName": parts[1],
 			}
 
-			listChartVersions(w, req, params)
+			ListChartVersions(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
@@ -521,7 +521,7 @@ func Test_getChartVersion(t *testing.T) {
 				"version":   tt.chart.ChartVersions[0].Version,
 			}
 
-			getChartVersion(w, req, params)
+			GetChartVersion(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
@@ -584,7 +584,7 @@ func Test_getChartIcon(t *testing.T) {
 				"chartName": parts[1],
 			}
 
-			getChartIcon(w, req, params)
+			GetChartIcon(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code, "http status code should match")
@@ -648,7 +648,7 @@ func Test_getChartVersionReadme(t *testing.T) {
 				"version":   "0.1.0",
 			}
 
-			getChartVersionReadme(w, req, params)
+			GetChartVersionReadme(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code, "http status code should match")
@@ -712,7 +712,7 @@ func Test_getChartVersionValues(t *testing.T) {
 				"version":   "0.1.0",
 			}
 
-			getChartVersionValues(w, req, params)
+			GetChartVersionValues(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code, "http status code should match")

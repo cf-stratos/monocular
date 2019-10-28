@@ -47,7 +47,7 @@ func init() {
 		rootCmd.AddCommand(cmd)
 		cmd.Flags().String("db-type", "foundation-db", "Database backend. One of either: \"foundation-db\" or \"mongo-db\"")
 		cmd.Flags().String("mongo-url", "mongodb://fdb-service/27016", "FoundationDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-		cmd.Flags().String("mongo-database", "test", "FoundationDB Document database")
+		cmd.Flags().String("mongo-database", "charts", "FoundationDB Document database")
 		cmd.Flags().String("mongo-user", "", "FoundationDB user")
 
 		//cmd.Flags().String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")

@@ -26,6 +26,7 @@ import (
 
 	"github.com/globalsign/mgo/bson"
 	"github.com/gorilla/mux"
+	"github.com/kubeapps/common/datastore"
 	"github.com/kubeapps/common/response"
 	log "github.com/sirupsen/logrus"
 )
@@ -71,6 +72,17 @@ type meta struct {
 // count is used to parse the result of a $count operation in the database
 type count struct {
 	Count int
+}
+
+var pathPrefix string
+var dbSession datastore.Session
+
+func SetPathPrefix(prefix string) {
+	pathPrefix = prefix
+}
+
+func InitDBConfig(session datastore.Session, name string) {
+	dbSession = session
 }
 
 // getPageNumberAndSize extracts the page number and size of a request. Default (1, 0) if not set

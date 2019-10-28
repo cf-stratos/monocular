@@ -78,6 +78,10 @@ type count struct {
 }
 
 var dbClient *mongo.Client
+var db *mongo.Database
+var dbCloser func()
+
+//var db mongo.Database
 var dbName string
 var pathPrefix string
 
@@ -87,6 +91,7 @@ func SetPathPrefix(prefix string) {
 
 func InitDBConfig(client *mongo.Client, name string) {
 	dbClient = client
+	db, dbCloser = GetDatabase(dbClient, name)
 	dbName = name
 }
 
@@ -129,9 +134,7 @@ func uniqChartList(charts []*models.Chart) []*models.Chart {
 }
 
 func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListResponse, interface{}, error) {
-	log.Info("Request for charts..")
-	db, closer := Database(dbClient, dbName)
-	defer closer()
+	log.Info("Request for paginated chart list..")
 
 	//Find all charts for repo name and sort by chart name
 	collection := db.Collection(chartCollection)
@@ -151,7 +154,7 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 
 	for resultCursor.Next(context.Background()) {
 		chart := models.Chart{}
-
+		log.Infof("Decoding chart for pagination. Repo: %v", repo)
 		// Decode the document
 		if err := resultCursor.Decode(&chart); err != nil {
 			log.WithError(err).Errorf(
@@ -160,24 +163,31 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 			)
 			continue
 		}
+		log.Infof("Decoded chart for pagination. Chart: %v.", chart)
 		// Add to a temporary map with the Digest of the latest version
 		// Adding to the map removes duplicates
+		log.Infof("Chart digest: %v.", chart.ChartVersions[0].Digest)
 		tempChartMap[chart.ChartVersions[0].Digest] = &chart
 	}
 
+	log.Infof("Charts in map: %v", len(tempChartMap))
 	//Now just get all the values from our map
 	uniqueCharts := make([]*models.Chart, 0, len(tempChartMap))
-	for _, v := range uniqueCharts {
+	for _, v := range tempChartMap {
+		log.Infof("Adding chart: %v to unique chart list.", *v)
 		uniqueCharts = append(uniqueCharts, v)
 	}
 
+	log.Infof("Charts in unique list: %v", len(uniqueCharts))
 	//Sort the list of paginated charts by name
 	sort.Slice(uniqueCharts, func(i, j int) bool {
 		return uniqueCharts[i].Name < uniqueCharts[j].Name
 	})
 
 	sortedCharts := uniqueCharts
-	var paginatedCharts []*models.Chart
+	log.Infof("Charts in sorted list: %v", len(sortedCharts))
+	log.Infof("Page size requested: %v", pageSize)
+	var paginatedCharts = sortedCharts
 	totalPages := 1
 	if pageSize != 0 {
 		// If a pageSize is given, returns only the the specified number of charts and
@@ -227,8 +237,6 @@ func ListRepoCharts(w http.ResponseWriter, req *http.Request, params Params) {
 
 // GetChart returns the chart from the given repo
 func GetChart(w http.ResponseWriter, req *http.Request, params Params) {
-	db, closer := Database(dbClient, dbName)
-	defer closer()
 	var chart models.Chart
 	chartID := fmt.Sprintf("%s/%s", params["repo"], params["chartName"])
 
@@ -247,8 +255,6 @@ func GetChart(w http.ResponseWriter, req *http.Request, params Params) {
 
 // ListChartVersions returns a list of chart versions for the given chart
 func ListChartVersions(w http.ResponseWriter, req *http.Request, params Params) {
-	db, closer := Database(dbClient, dbName)
-	defer closer()
 	var chart models.Chart
 	chartID := fmt.Sprintf("%s/%s", params["repo"], params["chartName"])
 
@@ -267,8 +273,6 @@ func ListChartVersions(w http.ResponseWriter, req *http.Request, params Params) 
 
 // GetChartVersion returns the given chart version
 func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
-	db, closer := Database(dbClient, dbName)
-	defer closer()
 	var chart models.Chart
 	chartID := fmt.Sprintf("%s/%s", params["repo"], params["chartName"])
 
@@ -279,7 +283,7 @@ func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 	}
 	projection := bson.M{
 		"name": 1, "repo": 1, "description": 1, "home": 1, "keywords": 1, "maintainers": 1, "sources": 1,
-		"chartversions.$": 1,
+		"chartversions": 1,
 	}
 	findResult := chartCollection.FindOne(context.Background(), filter, options.FindOne().SetProjection(projection))
 	if findResult.Decode(&chart) == mongo.ErrNoDocuments {
@@ -288,17 +292,14 @@ func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 		return
 	}
 
-	//TODO kate - cannot use the positional operator on chart versions, so here cut the versions array
-	// down to just the one specified in params["version"]
-
+	// Cut the versions slice down to just one element
+	chart.ChartVersions = chart.ChartVersions[0:1]
 	cvr := newChartVersionResponse(&chart, chart.ChartVersions[0])
 	response.NewDataResponse(cvr).Write(w)
 }
 
 // GetChartIcon returns the icon for a given chart
 func GetChartIcon(w http.ResponseWriter, req *http.Request, params Params) {
-	db, closer := Database(dbClient, dbName)
-	defer closer()
 	var chart models.Chart
 	chartID := fmt.Sprintf("%s/%s", params["repo"], params["chartName"])
 
@@ -320,8 +321,7 @@ func GetChartIcon(w http.ResponseWriter, req *http.Request, params Params) {
 
 // GetChartVersionReadme returns the README for a given chart
 func GetChartVersionReadme(w http.ResponseWriter, req *http.Request, params Params) {
-	db, closer := Database(dbClient, dbName)
-	defer closer()
+
 	var files models.ChartFiles
 	fileID := fmt.Sprintf("%s/%s-%s", params["repo"], params["chartName"], params["version"])
 
@@ -344,8 +344,6 @@ func GetChartVersionReadme(w http.ResponseWriter, req *http.Request, params Para
 
 // GetChartVersionValues returns the values.yaml for a given chart
 func GetChartVersionValues(w http.ResponseWriter, req *http.Request, params Params) {
-	db, closer := Database(dbClient, dbName)
-	defer closer()
 	var files models.ChartFiles
 
 	fileID := fmt.Sprintf("%s/%s-%s", params["repo"], params["chartName"], params["version"])
@@ -363,8 +361,6 @@ func GetChartVersionValues(w http.ResponseWriter, req *http.Request, params Para
 
 // ListChartsWithFilters returns the list of repos that contains the given chart and the latest version found
 func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Params) {
-	db, closer := Database(dbClient, dbName)
-	defer closer()
 
 	var charts []*models.Chart
 
@@ -408,8 +404,7 @@ func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Para
 //  - any source
 //  - any maintainer name
 func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
-	db, closer := Database(dbClient, dbName)
-	defer closer()
+
 	query := req.FormValue("q")
 	var charts []*models.Chart
 
@@ -513,7 +508,7 @@ func newChartVersionListResponse(c *models.Chart) apiListResponse {
 	return cvl
 }
 
-func Database(client *mongo.Client, dbName string) (*mongo.Database, func()) {
+func GetDatabase(client *mongo.Client, dbName string) (*mongo.Database, func()) {
 
 	db := client.Database(dbName)
 	return db, func() {

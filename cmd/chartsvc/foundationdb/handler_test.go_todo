@@ -18,6 +18,7 @@ package foundationdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"image/color"
@@ -25,6 +26,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"local/monocular/cmd/chartsvc/models"
 
@@ -32,6 +34,9 @@ import (
 	"github.com/kubeapps/common/datastore/mockstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 type bodyAPIListResponse struct {
@@ -48,6 +53,9 @@ var cc count
 
 const testChartReadme = "# Quickstart\n\n```bash\nhelm install my-repo/my-chart\n```"
 const testChartValues = "image:\n  registry: docker.io\n  repository: my-repo/my-chart\n  tag: 0.1.0"
+
+const fdbURL = "mongodb://fdb-service/27016"
+const fDB = "charts"
 
 func iconBytes() []byte {
 	var b bytes.Buffer
@@ -243,11 +251,9 @@ func Test_listCharts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbSession = mockstore.NewMockSession(&m)
-
-			m.On("All", &chartsList).Run(func(args mock.Arguments) {
-				*args.Get(0).(*[]*models.Chart) = tt.charts
-			})
+				m.On("All", &chartsList).Run(func(args mock.Arguments) {
+					*args.Get(0).(*[]*models.Chart) = tt.charts
+				})
 			if tt.query != "" {
 				m.On("One", &cc).Run(func(args mock.Arguments) {
 					*args.Get(0).(*count) = count{len(tt.charts)}
@@ -256,7 +262,7 @@ func Test_listCharts(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest("GET", "/charts"+tt.query, nil)
-			listCharts(w, req)
+			ListCharts(w, req)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, http.StatusOK, w.Code)
@@ -306,7 +312,6 @@ func Test_listRepoCharts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbSession = mockstore.NewMockSession(&m)
 
 			m.On("All", &chartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
@@ -323,7 +328,7 @@ func Test_listRepoCharts(t *testing.T) {
 				"repo": "my-repo",
 			}
 
-			listRepoCharts(w, req, params)
+			ListRepoCharts(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, http.StatusOK, w.Code)
@@ -372,7 +377,6 @@ func Test_getChart(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbSession = mockstore.NewMockSession(&m)
 
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
@@ -390,7 +394,7 @@ func Test_getChart(t *testing.T) {
 				"chartName": parts[1],
 			}
 
-			getChart(w, req, params)
+			GetChart(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
@@ -436,7 +440,6 @@ func Test_listChartVersions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbSession = mockstore.NewMockSession(&m)
 
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
@@ -454,7 +457,7 @@ func Test_listChartVersions(t *testing.T) {
 				"chartName": parts[1],
 			}
 
-			listChartVersions(w, req, params)
+			ListChartVersions(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
@@ -801,4 +804,27 @@ func Test_findLatestChart(t *testing.T) {
 			t.Errorf("Expecting %v, received %v", charts[0], data[0].ID)
 		}
 	})
+}
+
+func initDBClient(t *testing.T) error {
+	clientOptions := options.Client().ApplyURI(fdbURL)
+	client, err := mongo.Connect(context.TODO(), clientOptions)
+	if err != nil {
+		t.Fatalf("Can't create client for FoundationDB document layer: %v", err)
+		return err
+	} else {
+		t.Logf("Connection created Attempting to ping foundation db...")
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		t.Logf("Can't connect to FoundationDB document layer: %v", err)
+		return err
+	} else {
+		t.Logf("Successfully connected to FoundationDB document layer.")
+	}
+
+	InitDBConfig(client, fDB)
+	SetPathPrefix("/v1")
+	return nil
 }
