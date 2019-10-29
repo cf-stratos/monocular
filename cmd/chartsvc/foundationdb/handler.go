@@ -292,8 +292,13 @@ func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 		return
 	}
 
+	for i := range chart.ChartVersions {
+		if chart.ChartVersions[i].Version == params["version"] {
+			chart.ChartVersions = chart.ChartVersions[i : i+1]
+			break
+		}
+	}
 	// Cut the versions slice down to just one element
-	chart.ChartVersions = chart.ChartVersions[0:1]
 	cvr := newChartVersionResponse(&chart, chart.ChartVersions[0])
 	response.NewDataResponse(cvr).Write(w)
 }
