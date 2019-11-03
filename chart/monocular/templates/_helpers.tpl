@@ -49,17 +49,24 @@ spec:
     args:
     - sync
     - --user-agent-comment=monocular/{{ $global.Chart.AppVersion }}
-    {{- if and $global.Values.global.mongoUrl (not $global.Values.mongodb.enabled) }}
+    {{- if $global.Values.mongodb.enabled }}
+    {{- if $global.Values.foundationdb.enabled }}
+    {{- fail "mongodb and foundationdb are mutually exclusive!" }}
+    {{- end }}
+    {{- end }}
+    {{- if and $global.Values.global.mongoUrl (not $global.Values.mongodb.enabled) and (not $global.Values.foundationdb.enabled)}}
     - --mongo-url={{ $global.Values.global.mongoUrl }}
-    {{- else }}
+    {{- else if $global.Values.mongodb.enabled}}
     - --mongo-url={{ template "mongodb.fullname" $global }}
     - --mongo-user=root
+    {{- else if $global.Values.foundationdb.enabled}}
+    - --mongo-url={{ template "foundationdb.fullname" $global }}
     {{- end }}
     - {{ $repo.name }}
     - {{ $repo.url }}
     command:
     - /chart-repo
-    {{- if $global.Values.mongodb.enabled }}
+    {{- if or $global.Values.mongodb.enabled $global.Values.foundationdb.enabled}}
     env:
     - name: HTTP_PROXY
       value: {{ $global.Values.sync.httpProxy }}

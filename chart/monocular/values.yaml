@@ -64,6 +64,25 @@ chartsvc:
   tolerations: []
   affinity: {}
 
+#Dependency optionally replaces mongo
+foundationdb:
+  image:
+     registry: docker.io
+     repository: foundationdb/foundationdb
+     tag: 6.0.18
+  service:
+    name: fdb
+    port: 4500
+
+fdbdocumentlayer:  
+  image:
+    registry: docker.io
+    repository: foundationdb/fdb-document-layer
+    tag: 1.7.2
+  service:
+    name: fdb-doc-layer
+    port: 27016
+
 ui:
   replicaCount: 2
   image:
@@ -141,14 +160,17 @@ ingress:
   ##
   # tls:
   #   secretName: monocular.local-tls
-
+  
 mongodb:
-  enabled: false
+  enabled: true
   persistence:
-    enabled: false
+    enabled: true
+
+foundationdb:
+  enabled: false
 
 # External MongoDB connection URL.
-# This must be set if mongodb.enabled is set to false, following the pattern:
+# This must be set if mongodb.enabled and foundationdb are set to false, following the pattern:
 # `mongodb://${MONGODB_USER}:${MONGODB_ROOT_PASSWORD}@${MONGODB_DNS}:${MONGODB_PORT}/${MONGODB_DATABASE}`
 # ref: https://docs.mongodb.com/manual/reference/connection-string/
 global:
