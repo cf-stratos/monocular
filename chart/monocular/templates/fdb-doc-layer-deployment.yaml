@@ -1,0 +1,43 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}-fdbdoclayer
+  labels:
+    app: {{ template "fullname" . }}-fdbdoclayer
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "fullname" . }}-fdbdoclayer
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "fullname" . }}-fdbdoclayer
+        release: {{ .Release.Name }}
+    spec:
+{{- with .Values.securityContext }}
+      securityContext:
+{{ toYaml . | indent 8 }}
+{{- end }}
+      containers:
+        name: {{ .Chart.Name }}
+        image: {{ .Values.fdbdoclayer.image }}
+        env:
+          name: FDB_CLUSTER_CONTENT
+          value: 1P2wnIMi:NTZwIjJv@{{ template "fullname" . }}-fdb:{{ .Values.fdb.service.port }}
+        ports:
+          name: {{ .Values.fdbdoclayer.service.name }}
+          containerPort: {{ .Values.fdbdoclayer.service.port }}
+        livenessProbe:
+          tcpSocket:
+            port: {{ .Values.fdbdoclayer.service.port }}
+          initialDelaySeconds: 3
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: {{ .Values.fdbdoclayer.service.port }}
+          initialDelaySeconds: 3
+          periodSeconds: 10

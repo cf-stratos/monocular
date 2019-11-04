@@ -1,0 +1,20 @@
+Initially based on: https://github.com/Chr1st0ph/foundationdb-kubernetes
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "fullname" . }}-fdbserver
+  labels:
+    app: {{ template "fullname" . }}-fdbserver
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.fdbserver.service.port }}
+    targetPort: {{ .Values.fdbserver.service.port }}
+    name: {{ .Values.fdbserver.service.name }}
+  selector:
+    app: {{ template "fullname" . }}-fdbserver
+    release: {{ .Release.Name }}

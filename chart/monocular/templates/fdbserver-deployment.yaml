@@ -1,0 +1,51 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}-fdbserver
+  labels:
+    app: {{ template "fullname" . }}-fdbserver
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "fullname" . }}-fdbserver
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "fullname" . }}-fdbserver
+        release: {{ .Release.Name }}
+    spec:
+{{- with .Values.securityContext }}
+      securityContext:
+{{ toYaml . | indent 8 }}
+{{- end }}
+      containers:
+      - name: {{ .Chart.Name }}
+        image: {{ .Values.fdbserver.image }}
+        lifecycle:
+          postStart: 
+            exec:
+              command:
+               - "sh"
+                - "-c"
+                - >
+                  fdbcli --exec "configure new single memory" || true
+        env:
+        - name: FDB_CLUSTER_CONTENT
+          value: 1P2wnIMi:NTZwIjJv@{{ template "fullname" . }}-fdbserver:{{ .Values.fdbserver.service.port }}
+        ports:
+        - name: {{ .Values.fdbserver.service.name }}
+          containerPort: {{ .Values.fdbserver.service.port }}
+        livenessProbe:
+          tcpSocket:
+            port: {{ .Values.fdbserver.service.port }}
+          initialDelaySeconds: 3
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: {{ .Values.fdbserver.service.port }}
+          initialDelaySeconds: 3
+          periodSeconds: 10
