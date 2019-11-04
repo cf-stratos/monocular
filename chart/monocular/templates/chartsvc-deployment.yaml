@@ -29,19 +29,18 @@ spec:
         command:
         - /chartsvc
         args:
-          {{- if $global.Values.mongodb.enabled }}
-          {{- if $global.Values.foundationdb.enabled }}
-          {{- fail "mongodb and foundationdb are mutually exclusive!" }}
-          {{- end }}
-          {{- end }}
-          {{- if and $global.Values.global.mongoUrl (not $global.Values.mongodb.enabled) and (not $global.Values.foundationdb.enabled)}}
-          - --mongo-url={{ $global.Values.global.mongoUrl }}
-          {{- else if $global.Values.mongodb.enabled}}
-          - --mongo-url={{ template "mongodb.fullname" $global }}
-          - --mongo-user=root
-          {{- else if $global.Values.foundationdb.enabled}}
-          - --mongo-url={{ template "foundationdb.fullname" $global }}
-          {{- end }}
+        {{- if .Values.mongodb.enabled }}
+        {{- if .Values.fdbserver.enabled }}
+        {{- fail "mongodb and foundationdb are mutually exclusive!" }}
+        {{- end }}
+        {{- end }}
+        {{- if and .Values.global.mongoUrl (and (not .Values.mongodb.enabled) (not .Values.fdbserver.enabled))}}
+        - --mongo-url={{ .Values.global.mongoUrl }}
+        {{- else if .Values.fdbserver.enabled}}
+        - --mongo-url={{ template "fdbserver.fullname" . }}
+        {{- else }}
+        - --mongo-url={{ template "mongodb.fullname" . }}
+        - --mongo-user=root
         env:
         - name: MONGO_PASSWORD
           valueFrom:

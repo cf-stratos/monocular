@@ -14,6 +14,7 @@ spec:
   ports:
   - port: {{ .Values.fdbserver.service.port }}
     targetPort: {{ .Values.fdbserver.service.port }}
+    protocol: TCP
     name: {{ .Values.fdbserver.service.name }}
   selector:
     app: {{ template "fullname" . }}-fdbserver

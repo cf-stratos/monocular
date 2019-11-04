@@ -24,6 +24,14 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- end -}}
 
 {{/*
+Create a default fully qualified app name.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+*/}}
+{{- define "fdbserver.fullname" -}}
+{{- printf "%s-%s" .Release.Name "fdbserver" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
 Render image reference
 */}}
 {{- define "monocular.image" -}}
@@ -50,23 +58,23 @@ spec:
     - sync
     - --user-agent-comment=monocular/{{ $global.Chart.AppVersion }}
     {{- if $global.Values.mongodb.enabled }}
-    {{- if $global.Values.foundationdb.enabled }}
+    {{- if $global.Values.fdbserver.enabled }}
     {{- fail "mongodb and foundationdb are mutually exclusive!" }}
     {{- end }}
     {{- end }}
-    {{- if and $global.Values.global.mongoUrl (not $global.Values.mongodb.enabled) and (not $global.Values.foundationdb.enabled)}}
+    {{- if and $global.Values.global.mongoUrl (and (not $global.Values.mongodb.enabled) (not $global.Values.fdbserver.enabled))}}
     - --mongo-url={{ $global.Values.global.mongoUrl }}
     {{- else if $global.Values.mongodb.enabled}}
     - --mongo-url={{ template "mongodb.fullname" $global }}
     - --mongo-user=root
-    {{- else if $global.Values.foundationdb.enabled}}
-    - --mongo-url={{ template "foundationdb.fullname" $global }}
+    {{- else if $global.Values.fdbserver.enabled}}
+    - --mongo-url={{ template "fdbserver.fullname" $global }}
     {{- end }}
     - {{ $repo.name }}
     - {{ $repo.url }}
     command:
     - /chart-repo
-    {{- if or $global.Values.mongodb.enabled $global.Values.foundationdb.enabled}}
+    {{- if or $global.Values.mongodb.enabled $global.Values.fdbserver.enabled}}
     env:
     - name: HTTP_PROXY
       value: {{ $global.Values.sync.httpProxy }}

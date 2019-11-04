@@ -29,10 +29,16 @@ spec:
           postStart: 
             exec:
               command:
-               - "sh"
+                - "sh"
                 - "-c"
                 - >
                   fdbcli --exec "configure new single memory" || true
+        resources:
+          limits:
+            cpu: "1"
+          requests:
+            cpu: "0.25"
+            memory: "1024Mi"
         env:
         - name: FDB_CLUSTER_CONTENT
           value: 1P2wnIMi:NTZwIjJv@{{ template "fullname" . }}-fdbserver:{{ .Values.fdbserver.service.port }}

@@ -10,8 +10,9 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    port: {{ .Values.fdbdoclayer.service.port }}
+  - port: {{ .Values.fdbdoclayer.service.port }}
     targetPort: {{ .Values.fdbdoclayer.service.port }}
+    protocol: TCP
     name: {{ .Values.fdbdoclayer.service.name }}
   selector:
     app: {{ template "fullname" . }}-fdbdoclayer

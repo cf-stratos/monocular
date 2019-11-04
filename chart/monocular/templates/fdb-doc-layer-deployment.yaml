@@ -23,13 +23,13 @@ spec:
 {{ toYaml . | indent 8 }}
 {{- end }}
       containers:
-        name: {{ .Chart.Name }}
+      - name: {{ .Chart.Name }}
         image: {{ .Values.fdbdoclayer.image }}
         env:
-          name: FDB_CLUSTER_CONTENT
-          value: 1P2wnIMi:NTZwIjJv@{{ template "fullname" . }}-fdb:{{ .Values.fdb.service.port }}
+        - name: FDB_CLUSTER_CONTENT
+          value: 1P2wnIMi:NTZwIjJv@{{ template "fullname" . }}-fdbserver:{{ .Values.fdbserver.service.port }}
         ports:
-          name: {{ .Values.fdbdoclayer.service.name }}
+        - name: {{ .Values.fdbdoclayer.service.name }}
           containerPort: {{ .Values.fdbdoclayer.service.port }}
         livenessProbe:
           tcpSocket:
