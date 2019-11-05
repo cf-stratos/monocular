@@ -39,7 +39,8 @@ chartsvc:
     tag: v1.5.0
   service:
     port: 8080
-  replicas: 3
+  #replicas: 3
+  replicas: 1
   # TODO: review suggested resource limits/requests
   resources: {}
     # limits:
@@ -67,25 +68,28 @@ chartsvc:
 #Dependency optionally replaces mongo
 fdbserver:
   enabled: true
+  replicas: 1
   image:
-     registry: docker.io
-     repository: foundationdb/foundationdb
-     tag: 6.0.18
+    registry: docker.io
+    repository: foundationdb/foundationdb
+    tag: 6.0.18-monocular
   service:
     name: fdbserver
     port: 4500
 
-fdbdoclayer:  
+fdbdoclayer:
+  replicas: 1
   image:
     registry: docker.io
     repository: foundationdb/fdb-document-layer
-    tag: 1.7.2
+    tag: 1.7.2-monocular
   service:
     name: fdbdoclayer
     port: 27016
 
 ui:
-  replicaCount: 2
+  #replicaCount: 2
+  replicaCount: 1
   image:
     registry: quay.io
     repository: helmpack/monocular-ui

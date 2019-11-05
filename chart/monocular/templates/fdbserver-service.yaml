@@ -1,5 +1,3 @@
-Initially based on: https://github.com/Chr1st0ph/foundationdb-kubernetes
-
 apiVersion: v1
 kind: Service
 metadata:

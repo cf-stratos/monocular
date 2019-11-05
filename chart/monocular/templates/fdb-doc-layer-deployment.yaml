@@ -8,6 +8,7 @@ metadata:
     release: "{{ .Release.Name }}"
     heritage: "{{ .Release.Service }}"
 spec:
+  replicas: {{ .Values.fdbdoclayer.replicas }}
   selector:
     matchLabels:
       app: {{ template "fullname" . }}-fdbdoclayer
@@ -23,14 +24,15 @@ spec:
 {{ toYaml . | indent 8 }}
 {{- end }}
       containers:
-      - name: {{ .Chart.Name }}
-        image: {{ .Values.fdbdoclayer.image }}
+      - name: fdbdoclayer
+        image: {{ template "monocular.image" .Values.fdbdoclayer.image }}
         env:
-        - name: FDB_CLUSTER_CONTENT
-          value: 1P2wnIMi:NTZwIjJv@{{ template "fullname" . }}-fdbserver:{{ .Values.fdbserver.service.port }}
+        - name: FDB_COORDINATOR
+          value: dev-monocular-fdbserver.monocular.svc.cluster.local
+        - name: CLUSTER_ID
+          value: chartdb:erlklkg
         ports:
-        - name: {{ .Values.fdbdoclayer.service.name }}
-          containerPort: {{ .Values.fdbdoclayer.service.port }}
+        - containerPort: {{ .Values.fdbdoclayer.service.port }}
         livenessProbe:
           tcpSocket:
             port: {{ .Values.fdbdoclayer.service.port }}

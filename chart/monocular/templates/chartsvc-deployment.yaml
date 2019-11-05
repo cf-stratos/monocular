@@ -29,24 +29,13 @@ spec:
         command:
         - /chartsvc
         args:
-        {{- if .Values.mongodb.enabled }}
-        {{- if .Values.fdbserver.enabled }}
-        {{- fail "mongodb and foundationdb are mutually exclusive!" }}
-        {{- end }}
-        {{- end }}
         {{- if and .Values.global.mongoUrl (and (not .Values.mongodb.enabled) (not .Values.fdbserver.enabled))}}
         - --mongo-url={{ .Values.global.mongoUrl }}
         {{- else if .Values.fdbserver.enabled}}
-        - --mongo-url={{ template "fdbserver.fullname" . }}
+        - --mongo-url=mongodb://{{ template "fullname" . }}-fdbdoclayer:{{ .Values.fdbdoclayer.service.port }}
         {{- else }}
         - --mongo-url={{ template "mongodb.fullname" . }}
         - --mongo-user=root
-        env:
-        - name: MONGO_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: {{ template "mongodb.fullname" . }}
-              key: mongodb-root-password
         {{- end }}
         ports:
         - name: http

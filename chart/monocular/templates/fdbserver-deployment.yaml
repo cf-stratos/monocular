@@ -8,6 +8,7 @@ metadata:
     release: "{{ .Release.Name }}"
     heritage: "{{ .Release.Service }}"
 spec:
+  replicas: {{ .Values.fdbserver.replicas }}
   selector:
     matchLabels:
       app: {{ template "fullname" . }}-fdbserver
@@ -23,8 +24,8 @@ spec:
 {{ toYaml . | indent 8 }}
 {{- end }}
       containers:
-      - name: {{ .Chart.Name }}
-        image: {{ .Values.fdbserver.image }}
+      - name: fdbserver
+        image: {{ template "monocular.image" .Values.fdbserver.image }}
         lifecycle:
           postStart: 
             exec:
@@ -33,18 +34,13 @@ spec:
                 - "-c"
                 - >
                   fdbcli --exec "configure new single memory" || true
-        resources:
-          limits:
-            cpu: "1"
-          requests:
-            cpu: "0.25"
-            memory: "1024Mi"
         env:
-        - name: FDB_CLUSTER_CONTENT
-          value: 1P2wnIMi:NTZwIjJv@{{ template "fullname" . }}-fdbserver:{{ .Values.fdbserver.service.port }}
+        - name: FDB_COORDINATOR
+          value: dev-monocular-fdbserver.monocular.svc.cluster.local
+        - name: CLUSTER_ID
+          value: chartdb:erlklkg
         ports:
-        - name: {{ .Values.fdbserver.service.name }}
-          containerPort: {{ .Values.fdbserver.service.port }}
+        - containerPort: {{ .Values.fdbserver.service.port }}
         livenessProbe:
           tcpSocket:
             port: {{ .Values.fdbserver.service.port }}

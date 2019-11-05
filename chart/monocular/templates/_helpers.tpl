@@ -57,18 +57,13 @@ spec:
     args:
     - sync
     - --user-agent-comment=monocular/{{ $global.Chart.AppVersion }}
-    {{- if $global.Values.mongodb.enabled }}
-    {{- if $global.Values.fdbserver.enabled }}
-    {{- fail "mongodb and foundationdb are mutually exclusive!" }}
-    {{- end }}
-    {{- end }}
     {{- if and $global.Values.global.mongoUrl (and (not $global.Values.mongodb.enabled) (not $global.Values.fdbserver.enabled))}}
     - --mongo-url={{ $global.Values.global.mongoUrl }}
     {{- else if $global.Values.mongodb.enabled}}
     - --mongo-url={{ template "mongodb.fullname" $global }}
     - --mongo-user=root
     {{- else if $global.Values.fdbserver.enabled}}
-    - --mongo-url={{ template "fdbserver.fullname" $global }}
+    - --mongo-url=mongodb://{{ template "fdbserver.fullname" $global }}:{{ $global.Values.fdbdoclayer.service.port }}
     {{- end }}
     - {{ $repo.name }}
     - {{ $repo.url }}
@@ -80,11 +75,6 @@ spec:
       value: {{ $global.Values.sync.httpProxy }}
     - name: HTTPS_PROXY
       value: {{ $global.Values.sync.httpsProxy }}
-    - name: MONGO_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          key: mongodb-root-password
-          name: {{ template "mongodb.fullname" $global }}
     {{- end }}
     resources:
 {{ toYaml $global.Values.sync.resources | indent 6 }}
