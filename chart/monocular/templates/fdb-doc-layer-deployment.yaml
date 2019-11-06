@@ -28,7 +28,7 @@ spec:
         image: {{ template "monocular.image" .Values.fdbdoclayer.image }}
         env:
         - name: FDB_COORDINATOR
-          value: dev-monocular-fdbserver.monocular.svc.cluster.local
+          value: dev-monocular-fdbserver
         - name: CLUSTER_ID
           value: chartdb:erlklkg
         ports:

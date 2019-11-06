@@ -26,14 +26,14 @@ spec:
       containers:
       - name: fdbserver
         image: {{ template "monocular.image" .Values.fdbserver.image }}
-        lifecycle:
-          postStart: 
-            exec:
-              command:
-                - "sh"
-                - "-c"
-                - >
-                  fdbcli --exec "configure new single memory" || true
+        # lifecycle:
+        #   postStart: 
+        #     exec:
+        #       command:
+        #         - "sh"
+        #         - "-c"
+        #         - >
+        #           fdbcli --exec "configure new single memory" || true
         env:
         - name: FDB_COORDINATOR
           value: dev-monocular-fdbserver.monocular.svc.cluster.local
@@ -41,13 +41,13 @@ spec:
           value: chartdb:erlklkg
         ports:
         - containerPort: {{ .Values.fdbserver.service.port }}
-        livenessProbe:
-          tcpSocket:
-            port: {{ .Values.fdbserver.service.port }}
-          initialDelaySeconds: 3
-          periodSeconds: 20
-        readinessProbe:
-          tcpSocket:
-            port: {{ .Values.fdbserver.service.port }}
-          initialDelaySeconds: 3
-          periodSeconds: 10
+        # livenessProbe:
+        #   tcpSocket:
+        #     port: {{ .Values.fdbserver.service.port }}
+        #   initialDelaySeconds: 3
+        #   periodSeconds: 20
+        # readinessProbe:
+        #   tcpSocket:
+        #     port: {{ .Values.fdbserver.service.port }}
+        #   initialDelaySeconds: 3
+        #   periodSeconds: 10

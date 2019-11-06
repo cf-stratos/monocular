@@ -3,7 +3,7 @@ sync:
   image:
     registry: quay.io
     repository: helmpack/chart-repo
-    tag: v1.5.0
+    tag: fdb-suse
   repos:
     # Official repositories
     - name: stable
@@ -36,7 +36,7 @@ chartsvc:
   image:
     registry: quay.io
     repository: helmpack/chartsvc
-    tag: v1.5.0
+    tag: fdb-suse
   service:
     port: 8080
   #replicas: 3

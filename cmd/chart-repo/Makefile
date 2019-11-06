@@ -1,5 +1,5 @@
 IMAGE_REPO ?= quay.io/helmpack/chart-repo
-IMAGE_TAG ?= latest
+IMAGE_TAG ?= fdb-suse
 # Version of the binary to be produced
 VERSION ?= $$(git rev-parse HEAD)
 

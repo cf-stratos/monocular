@@ -21,7 +21,6 @@ import (
 	"flag"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/heptiolabs/healthcheck"
@@ -30,7 +29,6 @@ import (
 	"github.com/urfave/negroni"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	fdb "local/monocular/cmd/chartsvc/foundationdb"
 )
@@ -90,7 +88,7 @@ func main() {
 	if *debug {
 		log.SetLevel(log.DebugLevel)
 	}
-	log.Infof("Attempting to connect to FDB: %v, %v, %v", fdbURL, fDB, debug)
+	log.Infof("Attempting to connect to FDB: %v, %v, %v", *fdbURL, *fDB, *debug)
 
 	clientOptions := options.Client().ApplyURI(*fdbURL)
 	client, err := mongo.Connect(context.TODO(), clientOptions)
@@ -98,16 +96,16 @@ func main() {
 		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
 		return
 	} else {
-		log.Infof("Connection created Attempting to ping foundation db...")
+		log.Infof("Client created.")
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-	err = client.Ping(ctx, readpref.Primary())
-	if err != nil {
-		log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
-		return
-	} else {
-		log.Info("Successfully connected to FoundationDB document layer.")
-	}
+	//ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	//err = client.Ping(ctx, readpref.Primary())
+	//if err != nil {
+	//	log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
+	//	return
+	//} else {
+	//		log.Info("Successfully connected to FoundationDB document layer.")
+	//}
 
 	fdb.InitDBConfig(client, *fDB)
 	fdb.SetPathPrefix(pathPrefix)

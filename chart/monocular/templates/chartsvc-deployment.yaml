@@ -29,6 +29,7 @@ spec:
         command:
         - /chartsvc
         args:
+        - --debug=true
         {{- if and .Values.global.mongoUrl (and (not .Values.mongodb.enabled) (not .Values.fdbserver.enabled))}}
         - --mongo-url={{ .Values.global.mongoUrl }}
         {{- else if .Values.fdbserver.enabled}}

@@ -19,14 +19,12 @@ package foundationdb
 import (
 	"context"
 	"os"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 //SyncCmd Add a new chart repository to FoundationDB and periodically sync it
@@ -56,7 +54,7 @@ var SyncCmd = &cobra.Command{
 			log.SetLevel(log.DebugLevel)
 		}
 
-		logrus.Infof("Attempting to connect to FDB: %v, %v, %v", fdbURL, fDB, debug)
+		logrus.Infof("Creating client for FDB: %v, %v, %v", fdbURL, fDB, debug)
 		//ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		clientOptions := options.Client().ApplyURI(fdbURL)
 		client, err := mongo.Connect(context.TODO(), clientOptions)
@@ -64,16 +62,16 @@ var SyncCmd = &cobra.Command{
 			log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
 			return
 		} else {
-			log.Infof("Connection created Attempting to ping foundation db...")
+			log.Infof("Client created.")
 		}
-		ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-		err = client.Ping(ctx, readpref.Primary())
-		if err != nil {
-			log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
-			return
-		} else {
-			log.Info("Successfully connected to FoundationDB document layer.")
-		}
+		// ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+		// err = client.Ping(ctx, readpref.Primary())
+		// if err != nil {
+		// 	log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
+		// 	return
+		// } else {
+		// 	log.Info("Successfully connected to FoundationDB document layer.")
+		// }
 		authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
 		if err = syncRepo(client, fDB, args[0], args[1], authorizationHeader); err != nil {
 			log.Fatalf("Can't add chart repository to database: %v", err)
