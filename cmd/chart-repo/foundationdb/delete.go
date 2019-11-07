@@ -37,7 +37,7 @@ var DeleteCmd = &cobra.Command{
 			cmd.Help()
 			return
 		}
-		fdbURL, err := cmd.Flags().GetString("foundation-url")
+		fdbURL, err := cmd.Flags().GetString("doclayer-url")
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -22,6 +22,7 @@ import (
 	"local/monocular/cmd/chart-repo/foundationdb"
 	"local/monocular/cmd/chart-repo/utils"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -45,6 +46,18 @@ func init() {
 
 	for _, cmd := range cmds {
 		rootCmd.AddCommand(cmd)
+
+		dbType, err := cmd.Flags().GetString("db-type")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		switch dbType {
+		case "mongodb":
+		case "fdb":
+		default: //unknown db type
+		}
+
 		cmd.Flags().String("db-type", "foundation-db", "Database backend. One of either: \"foundation-db\" or \"mongo-db\"")
 		cmd.Flags().String("mongo-url", "mongodb://fdb-service/27016", "FoundationDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
 		cmd.Flags().String("mongo-database", "charts", "FoundationDB Document database")

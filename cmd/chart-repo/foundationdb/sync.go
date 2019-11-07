@@ -19,8 +19,8 @@ package foundationdb
 import (
 	"context"
 	"os"
+	"time"
 
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -38,11 +38,11 @@ var SyncCmd = &cobra.Command{
 			return
 		}
 
-		fdbURL, err := cmd.Flags().GetString("mongo-url")
+		fdbURL, err := cmd.Flags().GetString("doclayer-url")
 		if err != nil {
 			log.Fatal(err)
 		}
-		fDB, err := cmd.Flags().GetString("mongo-database")
+		fDB, err := cmd.Flags().GetString("doclayer-database")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -54,9 +54,8 @@ var SyncCmd = &cobra.Command{
 			log.SetLevel(log.DebugLevel)
 		}
 
-		logrus.Infof("Creating client for FDB: %v, %v, %v", fdbURL, fDB, debug)
-		//ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-		clientOptions := options.Client().ApplyURI(fdbURL)
+		log.Infof("Creating client for FDB: %v, %v, %v", fdbURL, fDB, debug)
+		clientOptions := options.Client().ApplyURI(fdbURL).SetMinPoolSize(10).SetMaxPoolSize(100)
 		client, err := mongo.Connect(context.TODO(), clientOptions)
 		if err != nil {
 			log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
@@ -64,20 +63,13 @@ var SyncCmd = &cobra.Command{
 		} else {
 			log.Infof("Client created.")
 		}
-		// ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-		// err = client.Ping(ctx, readpref.Primary())
-		// if err != nil {
-		// 	log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
-		// 	return
-		// } else {
-		// 	log.Info("Successfully connected to FoundationDB document layer.")
-		// }
+		startTime := time.Now()
 		authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
 		if err = syncRepo(client, fDB, args[0], args[1], authorizationHeader); err != nil {
 			log.Fatalf("Can't add chart repository to database: %v", err)
 			return
 		}
-
-		log.Infof("Successfully added the chart repository %s to database", args[0])
+		timeTaken := time.Since(startTime).Seconds()
+		log.Infof("Successfully added the chart repository %s to database in %v seconds", args[0], timeTaken)
 	},
 }

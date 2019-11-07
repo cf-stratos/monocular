@@ -65,28 +65,6 @@ chartsvc:
   tolerations: []
   affinity: {}
 
-#Dependency optionally replaces mongo
-fdbserver:
-  enabled: true
-  replicas: 1
-  image:
-    registry: docker.io
-    repository: foundationdb/foundationdb
-    tag: 6.0.18-monocular
-  service:
-    name: fdbserver
-    port: 4500
-
-fdbdoclayer:
-  replicas: 1
-  image:
-    registry: docker.io
-    repository: foundationdb/fdb-document-layer
-    tag: 1.7.2-monocular
-  service:
-    name: fdbdoclayer
-    port: 27016
-
 ui:
   #replicaCount: 2
   replicaCount: 1
@@ -166,6 +144,28 @@ ingress:
   # tls:
   #   secretName: monocular.local-tls
 
+#Dependency optionally replaces mongo
+fdbserver:
+  enabled: true
+  replicas: 1
+  image:
+    registry: docker.io
+    repository: foundationdb/foundationdb
+    tag: 6.0.18-monocular
+  service:
+    name: fdbserver
+    port: 4500
+
+fdbdoclayer:
+  replicas: 1
+  image:
+    registry: docker.io
+    repository: foundationdb/fdb-document-layer
+    tag: 1.7.2-monocular
+  service:
+    name: fdbdoclayer
+    port: 27016
+
 mongodb:
   enabled: false
 
@@ -186,3 +186,4 @@ securityContext: {}
 networkPolicy:
   enabled: false
 
+dbDebug: false

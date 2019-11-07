@@ -93,34 +93,20 @@ func init() {
 // charts before fetching readmes for each chart and version pair.
 func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
 
-	db, closer := Database(dbClient, dbName)
+	db, closer := database(dbClient, dbName)
 	defer closer()
 
-	log.Infof("Running a quick insert test...")
+	log.Infof("Checking database connection and readiness...")
 	collection := db.Collection("numbers")
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 	res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
 	if err != nil {
-		log.Fatalf("Failed to insert document: %v", err)
+		log.Fatalf("Database readiness test failed: %v", err)
 		return err
 	}
 	id := res.InsertedID
-	log.Debugf("Insert test successful: inserted doc with ID: %v", id)
-
-	//log.Infof("TESTING ONLY!: Clearing out all charts and chart files")
-	//collection = db.Collection(chartFilesCollection)
-	//_, err = collection.DeleteMany(context.Background(), bson.M{}, options.Delete())
-	//if err != nil {
-	//	log.Errorf("Error occurred clearing out chart files Err: %v", err)
-	//	return err
-	//}
-	//collection = db.Collection(chartCollection)
-	//_, err = collection.DeleteMany(context.Background(), bson.M{}, options.Delete())
-	//if err != nil {
-	//	log.Errorf("Error occurred clearing out charts Err: %v", err)
-	//	return err
-	//}
-	//log.Infof("TESTING ONLY!: Clearing out all charts and chart files")
+	log.Infof("Database connection test successful.")
+	log.Debugf("Inserted a test document to test collection with ID: %v", id)
 
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
@@ -135,12 +121,11 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 	}
 
 	charts := chartsFromIndex(index, r)
-	log.Infof("CHARTS in REPO: %v %v", repoURL, len(charts))
+	log.Debugf("%v Charts in index of repo: %v", len(charts), repoURL)
 	if len(charts) == 0 {
-		return errors.New("no charts in repository index")
+		return errors.New("No charts in repository index.")
 	}
-	//TODO Kate REMOVE!
-	//charts = charts[0:10]
+
 	err = importCharts(db, dbName, charts)
 	if err != nil {
 		return err
@@ -192,7 +177,7 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 }
 
 func deleteRepo(dbClient *mongo.Client, dbName, repoName string) error {
-	db, closer := Database(dbClient, dbName)
+	db, closer := database(dbClient, dbName)
 	defer closer()
 	collection := db.Collection(chartCollection)
 	filter := bson.M{
@@ -311,7 +296,7 @@ func importCharts(db *mongo.Database, dbName string, charts []types.Chart) error
 			operation.SetUpsert(true)
 			operations = append(operations, operation)
 		}
-		log.Infof("Adding chart insert operation for chart: %v", c.ID)
+		log.Debugf("Adding chart insert operation for chart: %v", c.ID)
 	}
 
 	//Must use bulk write for array of filters
@@ -324,8 +309,6 @@ func importCharts(db *mongo.Database, dbName string, charts []types.Chart) error
 
 	//Set upsert flag and upsert the pairs here
 	//Updates our index for charts that we already have and inserts charts that are new
-	//updateResult, err := collection.UpdateMany(context.Background(), pairs, options.Update()..SetUpsert(true))
-	//log.Debugf("Chart import (upsert many) result: %v", updateResult)
 	if err != nil {
 		log.Errorf("Error occurred during chart import (upsert many). Err: %v", err)
 		return err
@@ -408,7 +391,6 @@ func fetchAndImportIcon(db *mongo.Database, c types.Chart) error {
 	update := bson.M{"$set": bson.M{"raw_icon": b.Bytes()}}
 	filter := bson.M{"_id": c.ID}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update, options.Update())
-	//log.Debugf("Chart icon import (update one) result: %v", updateResult)
 	if err != nil {
 		log.Errorf("Error occurred during chart icon import (update one). Err: %v, Result: %v", err, updateResult)
 		return err
@@ -473,14 +455,13 @@ func fetchAndImportFiles(db *mongo.Database, name string, r types.Repo, cv types
 	}
 	if v, ok := files[valuesFileName]; ok {
 		chartFiles.Values = v
-		//log.Debugf("CHart values: %v", v)
 	} else {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Info("values.yaml not found")
 	}
 
 	// inserts the chart files if not already indexed, or updates the existing
 	// entry if digest has changed
-	log.Debugf("Inserting file %v to collection: %v....", chartFilesID, chartFilesCollection)
+	log.Debugf("Inserting chart files %v to collection: %v....", chartFilesID, chartFilesCollection)
 	collection = db.Collection(chartFilesCollection)
 	filter = bson.M{"_id": chartFilesID}
 	chartBSON, err := bson.Marshal(&chartFiles)
@@ -493,8 +474,7 @@ func fetchAndImportFiles(db *mongo.Database, name string, r types.Repo, cv types
 		log.Errorf("Error occurred during chart files import (update one). Chart files : %v doc: %v  Err: %v", chartFiles, doc, err)
 		return err
 	}
-	log.Debugf("Chart files import (update one) upserted: %v updated: %v", updateResult.UpsertedCount, updateResult.ModifiedCount)
-	log.Debugf("Insert success.")
+	log.Debugf("Chart files import success. (update one) Upserted: %v Updated: %v", updateResult.UpsertedCount, updateResult.ModifiedCount)
 	return nil
 }
 
@@ -564,4 +544,17 @@ func initNetClient(additionalCA string) (*http.Client, error) {
 			Proxy: http.ProxyFromEnvironment,
 		},
 	}, nil
+}
+
+func database(client *mongo.Client, dbName string) (*mongo.Database, func()) {
+
+	db := client.Database(dbName)
+	return db, func() {
+		err := client.Disconnect(context.Background())
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("Connection to MongoDB closed.")
+	}
 }
