@@ -19,10 +19,8 @@ package main
 import (
 	"os"
 
-	"local/monocular/cmd/chart-repo/foundationdb"
 	"local/monocular/cmd/chart-repo/utils"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -42,30 +40,23 @@ func main() {
 }
 
 func init() {
-	cmds := []*cobra.Command{foundationdb.SyncCmd, foundationdb.DeleteCmd}
+
+	cmds := []*cobra.Command{SyncCmd, DeleteCmd}
 
 	for _, cmd := range cmds {
 		rootCmd.AddCommand(cmd)
 
-		dbType, err := cmd.Flags().GetString("db-type")
-		if err != nil {
-			log.Fatal(err)
-		}
+		//Flags for default mongoDB backend
+		cmd.Flags().String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
+		cmd.Flags().String("mongo-database", "charts", "MongoDB database")
+		cmd.Flags().String("mongo-user", "", "MongoDB user")
 
-		switch dbType {
-		case "mongodb":
-		case "fdb":
-		default: //unknown db type
-		}
+		//Flags for optional FoundationDB + Document Layer backend
+		cmd.Flags().String("doclayer-url", "mongodb://fdb-service/27016", "FoundationDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
+		cmd.Flags().String("doclayer-database", "charts", "FoundationDB Document database")
 
-		cmd.Flags().String("db-type", "foundation-db", "Database backend. One of either: \"foundation-db\" or \"mongo-db\"")
-		cmd.Flags().String("mongo-url", "mongodb://fdb-service/27016", "FoundationDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-		cmd.Flags().String("mongo-database", "charts", "FoundationDB Document database")
-		cmd.Flags().String("mongo-user", "", "FoundationDB user")
+		cmd.Flags().String("db-type", "mongo-db", "Database backend. Defaults to MongoDB if not specified.")
 
-		//cmd.Flags().String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-		//cmd.Flags().String("mongo-database", "charts", "MongoDB database")
-		//cmd.Flags().String("mongo-user", "", "MongoDB user")
 		// see version.go
 		cmd.Flags().StringVarP(&utils.UserAgentComment, "user-agent-comment", "", "", "UserAgent comment used during outbound requests")
 		cmd.Flags().Bool("debug", false, "verbose logging")

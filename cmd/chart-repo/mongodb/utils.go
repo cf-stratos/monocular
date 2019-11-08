@@ -87,7 +87,7 @@ func init() {
 // These steps are processed in this way to ensure relevant chart data is
 // imported into the database as fast as possible. E.g. we want all icons for
 // charts before fetching readmes for each chart and version pair.
-func syncRepo(dbSession datastore.Session, repoName, repoURL string, authorizationHeader string) error {
+func SyncRepo(dbSession datastore.Session, repoName, repoURL string, authorizationHeader string) error {
 	url, err := parseRepoUrl(repoURL)
 	if err != nil {
 		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
