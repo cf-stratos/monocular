@@ -24,7 +24,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Delete(cmd *cobra.Command, args []string) {
+//Sync Add a new chart repository to MongoDB and periodically sync it
+func Sync(cmd *cobra.Command, args []string) {
+
 	mongoURL, err := cmd.Flags().GetString("mongo-url")
 	if err != nil {
 		logrus.Fatal(err)
@@ -50,9 +52,11 @@ func Delete(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.Fatalf("Can't connect to mongoDB: %v", err)
 	}
-	if err = deleteRepo(dbSession, args[0]); err != nil {
-		logrus.Fatalf("Can't delete chart repository %s from database: %v", args[0], err)
+
+	authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
+	if err = syncRepo(dbSession, args[0], args[1], authorizationHeader); err != nil {
+		logrus.Fatalf("Can't add chart repository to database: %v", err)
 	}
 
-	logrus.Infof("Successfully deleted the chart repository %s from database", args[0])
+	logrus.Infof("Successfully added the chart repository %s to database", args[0])
 }

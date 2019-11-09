@@ -91,7 +91,7 @@ func init() {
 // These steps are processed in this way to ensure relevant chart data is
 // imported into the database as fast as possible. E.g. we want all icons for
 // charts before fetching readmes for each chart and version pair.
-func SyncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
+func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
 
 	db, closer := database(dbClient, dbName)
 	defer closer()

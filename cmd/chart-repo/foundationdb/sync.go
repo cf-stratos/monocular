@@ -18,17 +18,17 @@ package foundationdb
 
 import (
 	"context"
+	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
-//Delete Delete a chart repository from FoundationDB
-func Delete(cmd *cobra.Command, args []string) {
+//Sync Add a new chart repository to FoundationDB and periodically sync it
+func Sync(cmd *cobra.Command, args []string) {
 
 	fdbURL, err := cmd.Flags().GetString("doclayer-url")
 	if err != nil {
@@ -46,19 +46,21 @@ func Delete(cmd *cobra.Command, args []string) {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(fdbURL))
-	ctx, _ = context.WithTimeout(context.Background(), 2*time.Second)
-	err = client.Ping(ctx, readpref.Primary())
+	log.Infof("Creating client for FDB: %v, %v, %v", fdbURL, fDB, debug)
+	clientOptions := options.Client().ApplyURI(fdbURL).SetMinPoolSize(10).SetMaxPoolSize(100)
+	client, err := mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
-		log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
+		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
+		return
 	} else {
-		log.Info("Successfully connected to FoundationDB document layer.")
+		log.Infof("Client created.")
 	}
-
-	if err = deleteRepo(client, fDB, args[0]); err != nil {
-		log.Fatalf("Can't delete chart repository %s from database: %v", args[0], err)
+	startTime := time.Now()
+	authorizationHeader := os.Getenv("AUTHORIZATION_HEADER")
+	if err = syncRepo(client, fDB, args[0], args[1], authorizationHeader); err != nil {
+		log.Fatalf("Can't add chart repository to database: %v", err)
+		return
 	}
-
-	log.Infof("Successfully deleted the chart repository %s from database", args[0])
+	timeTaken := time.Since(startTime).Seconds()
+	log.Infof("Successfully added the chart repository %s to database in %v seconds", args[0], timeTaken)
 }

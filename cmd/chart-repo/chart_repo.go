@@ -46,16 +46,17 @@ func init() {
 	for _, cmd := range cmds {
 		rootCmd.AddCommand(cmd)
 
+		//Flag to configure running sync with either MongoDB or FoundationDB
+		cmd.Flags().String("db-type", "mongo-db", "Database backend. Defaults to MongoDB if not specified.")
+
 		//Flags for default mongoDB backend
 		cmd.Flags().String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
 		cmd.Flags().String("mongo-database", "charts", "MongoDB database")
 		cmd.Flags().String("mongo-user", "", "MongoDB user")
 
 		//Flags for optional FoundationDB + Document Layer backend
-		cmd.Flags().String("doclayer-url", "mongodb://fdb-service/27016", "FoundationDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-		cmd.Flags().String("doclayer-database", "charts", "FoundationDB Document database")
-
-		cmd.Flags().String("db-type", "mongo-db", "Database backend. Defaults to MongoDB if not specified.")
+		cmd.Flags().String("doclayer-url", "mongodb://fdb-service/27016", "FoundationDB Document Layer URL")
+		cmd.Flags().String("doclayer-database", "charts", "FoundationDB Document-Layer database")
 
 		// see version.go
 		cmd.Flags().StringVarP(&utils.UserAgentComment, "user-agent-comment", "", "", "UserAgent comment used during outbound requests")
