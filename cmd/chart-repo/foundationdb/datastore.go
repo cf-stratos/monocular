@@ -18,10 +18,14 @@ limitations under the License.
 package foundationdb
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/globalsign/mgo"
+	log "github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 const defaultTimeout = 30 * time.Second
@@ -86,51 +90,49 @@ type mgoSession struct {
 	*mgo.Session
 }
 
-func (s *mgoSession) DB() (Database, func()) {
-	copy := s.Session.Copy()
-	closer := func() { copy.Close() }
-	return &mgoDatabase{copy.DB(s.conf.Database)}, closer
-}
+func DB(client *mongo.Client, dbName string) (Database, func()) {
 
-// Change the database in use
-func (s *mgoSession) Use(name string) Session {
-	s.conf.Database = name
-	return s
-}
+	db := &mongoDatabase{client.Database(dbName)}
+
+	return db, func() {
+		err := client.Disconnect(context.Background())
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("Connection to MongoDB closed.")
+	}
+}s
 
 // mgoDatabase wraps an mgo.Database and implements Database
-type mgoDatabase struct {
-	*mgo.Database
+type mongoDatabase struct {
+	*mongo.Database
 }
 
-func (d *mgoDatabase) C(name string) Collection {
+func (d *mongoDatabase) C(name string) Collection {
 	return &mgoCollection{d.Database.C(name)}
 }
 
 // mgoCollection wraps an mgo.Collection and implements Collection
-type mgoCollection struct {
-	*mgo.Collection
+type mongoCollection struct {
+	*mongo.Collection
 }
 
-func (c *mgoCollection) Bulk() Bulk {
+func (c *mongoCollection) Bulk() Bulk {
 	return c.Collection.Bulk()
 }
 
-func (c *mgoCollection) Find(query interface{}) Query {
-	return &mgoQuery{c.Collection.Find(query)}
+func (c *mongoCollection) Find(query interface{}) Query {
+	return &mongoQuery{c.Collection.Find(query)}
 }
 
-func (c *mgoCollection) FindId(id interface{}) Query {
+func (c *mongoCollection) FindId(id interface{}) Query {
 	return &mgoQuery{c.Collection.FindId(id)}
-}
-
-func (c *mgoCollection) Pipe(pipeline interface{}) Pipe {
-	return &mgoPipe{c.Collection.Pipe(pipeline)}
 }
 
 // mgoQuery wraps an mgo.Query and implements Query
 type mgoQuery struct {
-	*mgo.Query
+	*mongo.Query
 }
 
 func (q *mgoQuery) Sort(fields ...string) Query {
@@ -139,11 +141,6 @@ func (q *mgoQuery) Sort(fields ...string) Query {
 
 func (q *mgoQuery) Select(selector interface{}) Query {
 	return &mgoQuery{q.Query.Select(selector)}
-}
-
-// mgoPipe wraps an mgo.Pipe and implements Pipe
-type mgoPipe struct {
-	*mgo.Pipe
 }
 
 // NewSession initializes a MongoDB connection to the given host
