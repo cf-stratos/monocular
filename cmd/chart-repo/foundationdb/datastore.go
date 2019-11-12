@@ -38,8 +38,7 @@ type Config struct {
 
 // Client is an interface for a MongoDB client
 type Client interface {
-	DB() (Database, func())
-	Use(name string) Client
+	Database(name string) (Database, func())
 }
 
 // Database is an interface for accessing a MongoDB database
@@ -61,23 +60,28 @@ type Collection interface {
 
 type MongoResult interface{}
 
-func DB(client *mongo.Client, dbName string) (Database, func()) {
+// mgoDatabase wraps an mgo.Database and implements Database
+type mongoDatabase struct {
+	Database *mongo.Database
+}
 
-	db := &mongoDatabase{client.Database(dbName)}
+// mgoDatabase wraps an mgo.Database and implements Database
+type mongoClient struct {
+	Client *mongo.Client
+}
+
+func (c *mongoClient) Database(dbName string) (Database, func()) {
+
+	db := &mongoDatabase{c.Client.Database(dbName)}
 
 	return db, func() {
-		err := client.Disconnect(context.Background())
+		err := c.Client.Disconnect(context.Background())
 
 		if err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println("Connection to MongoDB closed.")
 	}
-}
-
-// mgoDatabase wraps an mgo.Database and implements Database
-type mongoDatabase struct {
-	Database *mongo.Database
 }
 
 func (d *mongoDatabase) Collection(name string) Collection {

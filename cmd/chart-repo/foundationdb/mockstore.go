@@ -11,6 +11,24 @@ type mockDatabase struct {
 	*mock.Mock
 }
 
+type mockClient struct {
+	*mock.Mock
+}
+
+// NewMockSession returns a mocked Session
+func NewMockClient(m *mock.Mock) Client {
+	return mockClient{m}
+}
+
+// DB returns a mocked datastore.Database and empty closer function
+func (c mockClient) Database(dbName string) (Database, func()) {
+
+	db := &mockDatabase{c.Mock}
+
+	return db, func() {
+	}
+}
+
 func (d mockDatabase) Collection(name string) Collection {
 	return mockCollection{d.Mock}
 }
@@ -58,9 +76,4 @@ func (c mockCollection) FindOne(ctxt context.Context, filter interface{}, option
 func (c mockCollection) InsertOne(ctxt context.Context, document interface{}, options mongoInsertOneOptions) (MongoResult, error) {
 	c.Called(ctxt, document, options)
 	return mockFindOneResult{c.Mock}, nil
-}
-
-// NewMockSession returns a mocked Session
-func NewMockDB(m *mock.Mock) Database {
-	return mockDatabase{m}
 }

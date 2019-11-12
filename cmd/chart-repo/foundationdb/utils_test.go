@@ -40,7 +40,6 @@ import (
 	"github.com/arschles/assert"
 	"github.com/disintegration/imaging"
 	"github.com/globalsign/mgo/bson"
-	"github.com/kubeapps/common/datastore/mockstore"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/mock"
 )
@@ -72,19 +71,6 @@ func (h *goodHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		w.WriteHeader(500)
 	}
 
-	w.Write([]byte(validRepoIndexYAML))
-	return w.Result(), nil
-}
-
-type authenticatedHTTPClient struct{}
-
-func (h *authenticatedHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	w := httptest.NewRecorder()
-
-	// Ensure we're sending the right Authorization header
-	if !strings.Contains(req.Header.Get("Authorization"), "Bearer ThisSecretAccessTokenAuthenticatesTheClient") {
-		w.WriteHeader(500)
-	}
 	w.Write([]byte(validRepoIndexYAML))
 	return w.Result(), nil
 }
@@ -166,10 +152,10 @@ func Test_syncURLInvalidity(t *testing.T) {
 		{"invalid URL", "https//google.com"},
 	}
 	m := mock.Mock{}
-	dbSession := mockstore.NewMockSession(&m)
+	dbClient := NewMockClient(&m)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := syncRepo(dbSession, "test", tt.repoURL, "")
+			err := syncRepo(dbClient, "test", "test", tt.repoURL, "")
 			assert.ExistsErr(t, err, tt.name)
 		})
 	}
@@ -194,12 +180,6 @@ func Test_fetchRepoIndex(t *testing.T) {
 			assert.NoErr(t, err)
 		})
 	}
-
-	t.Run("authenticated request", func(t *testing.T) {
-		netClient = &authenticatedHTTPClient{}
-		_, err := fetchRepoIndex(types.Repo{URL: "https://my.examplerepo.com", AuthorizationHeader: "Bearer ThisSecretAccessTokenAuthenticatesTheClient"})
-		assert.NoErr(t, err)
-	})
 
 	t.Run("failed request", func(t *testing.T) {
 		netClient = &badHTTPClient{}
@@ -300,10 +280,11 @@ func Test_importCharts(t *testing.T) {
 	// Ensure Upsert func is called with some arguments
 	m.On("Upsert", mock.Anything)
 	m.On("RemoveAll", mock.Anything)
-	dbSession := mockstore.NewMockSession(m)
+	dbClient := NewMockClient(m)
+	db, _ := dbClient.Database("test")
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
 	charts := chartsFromIndex(index, types.Repo{Name: "test", URL: "http://testrepo.com"})
-	importCharts(dbSession, charts)
+	importCharts(db, "test", charts)
 
 	m.AssertExpectations(t)
 	// The Bulk Upsert method takes an array that consists of a selector followed by an interface to upsert.
@@ -322,9 +303,9 @@ func Test_DeleteRepo(t *testing.T) {
 	m.On("RemoveAll", bson.M{
 		"repo.name": "test",
 	})
-	dbSession := mockstore.NewMockSession(m)
+	dbClient := NewMockClient(m)
 
-	err := deleteRepo(dbSession, "test")
+	err := deleteRepo(dbClient, "test", "test")
 	if err != nil {
 		t.Errorf("failed to delete chart repo test: %v", err)
 	}
@@ -334,9 +315,10 @@ func Test_DeleteRepo(t *testing.T) {
 func Test_fetchAndImportIcon(t *testing.T) {
 	t.Run("no icon", func(t *testing.T) {
 		m := mock.Mock{}
-		dbSession := mockstore.NewMockSession(&m)
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
 		c := types.Chart{ID: "test/acs-engine-autoscaler"}
-		assert.NoErr(t, fetchAndImportIcon(dbSession, c))
+		assert.NoErr(t, fetchAndImportIcon(db, c))
 	})
 
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
@@ -346,25 +328,28 @@ func Test_fetchAndImportIcon(t *testing.T) {
 		netClient = &badHTTPClient{}
 		c := charts[0]
 		m := mock.Mock{}
-		dbSession := mockstore.NewMockSession(&m)
-		assert.Err(t, fmt.Errorf("500 %s", c.Icon), fetchAndImportIcon(dbSession, c))
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
+		assert.Err(t, fmt.Errorf("500 %s", c.Icon), fetchAndImportIcon(db, c))
 	})
 
 	t.Run("bad icon", func(t *testing.T) {
 		netClient = &badIconClient{}
 		c := charts[0]
 		m := mock.Mock{}
-		dbSession := mockstore.NewMockSession(&m)
-		assert.Err(t, image.ErrFormat, fetchAndImportIcon(dbSession, c))
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
+		assert.Err(t, image.ErrFormat, fetchAndImportIcon(db, c))
 	})
 
 	t.Run("valid icon", func(t *testing.T) {
 		netClient = &goodIconClient{}
 		c := charts[0]
 		m := mock.Mock{}
-		dbSession := mockstore.NewMockSession(&m)
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
 		m.On("UpdateId", c.ID, bson.M{"$set": bson.M{"raw_icon": iconBytes()}}).Return(nil)
-		assert.NoErr(t, fetchAndImportIcon(dbSession, c))
+		assert.NoErr(t, fetchAndImportIcon(db, c))
 		m.AssertExpectations(t)
 	})
 }
@@ -377,9 +362,10 @@ func Test_fetchAndImportFiles(t *testing.T) {
 	t.Run("http error", func(t *testing.T) {
 		m := mock.Mock{}
 		m.On("One", mock.Anything).Return(errors.New("return an error when checking if readme already exists to force fetching"))
-		dbSession := mockstore.NewMockSession(&m)
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
 		netClient = &badHTTPClient{}
-		assert.Err(t, io.EOF, fetchAndImportFiles(dbSession, charts[0].Name, charts[0].Repo, cv))
+		assert.Err(t, io.EOF, fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv))
 	})
 
 	t.Run("file not found", func(t *testing.T) {
@@ -388,8 +374,9 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
 		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, "", "", charts[0].Repo, cv.Digest})
-		dbSession := mockstore.NewMockSession(&m)
-		err := fetchAndImportFiles(dbSession, charts[0].Name, charts[0].Repo, cv)
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
+		err := fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv)
 		assert.NoErr(t, err)
 		m.AssertExpectations(t)
 	})
@@ -400,8 +387,9 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
 		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest})
-		dbSession := mockstore.NewMockSession(&m)
-		err := fetchAndImportFiles(dbSession, charts[0].Name, charts[0].Repo, cv)
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
+		err := fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv)
 		assert.NoErr(t, err)
 		m.AssertExpectations(t)
 	})
@@ -412,8 +400,9 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
 		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest})
-		dbSession := mockstore.NewMockSession(&m)
-		err := fetchAndImportFiles(dbSession, charts[0].Name, charts[0].Repo, cv)
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
+		err := fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv)
 		assert.NoErr(t, err)
 		m.AssertExpectations(t)
 	})
@@ -422,8 +411,9 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m := mock.Mock{}
 		// don't return an error when checking if files already exists
 		m.On("One", mock.Anything).Return(nil)
-		dbSession := mockstore.NewMockSession(&m)
-		err := fetchAndImportFiles(dbSession, charts[0].Name, charts[0].Repo, cv)
+		dbClient := NewMockClient(&m)
+		db, _ := dbClient.Database("test")
+		err := fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv)
 		assert.NoErr(t, err)
 		m.AssertNotCalled(t, "UpsertId", mock.Anything, mock.Anything)
 	})
@@ -588,7 +578,8 @@ func (h *emptyChartRepoHTTPClient) Do(req *http.Request) (*http.Response, error)
 func Test_emptyChartRepo(t *testing.T) {
 	netClient = &emptyChartRepoHTTPClient{}
 	m := mock.Mock{}
-	dbSession := mockstore.NewMockSession(&m)
-	err := syncRepo(dbSession, "testRepo", "https://my.examplerepo.com", "")
+	dbClient := NewMockClient(&m)
+	db, _ := dbClient.Database("test")
+	err := syncRepo(dbClient, "test", "testRepo", "https://my.examplerepo.com", "")
 	assert.ExistsErr(t, err, "Failed Request")
 }
