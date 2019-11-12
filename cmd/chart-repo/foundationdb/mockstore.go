@@ -1,31 +1,17 @@
 package foundationdb
 
 import (
-	"github.com/globalsign/mgo"
-	"github.com/kubeapps/common/datastore"
+	"context"
+
 	"github.com/stretchr/testify/mock"
 )
-
-// MockSession acts as a mock datastore.Session
-type mockSession struct {
-	*mock.Mock
-}
-
-// DB returns a mocked datastore.Database and empty closer function
-func (s mockSession) DB() (datastore.Database, func()) {
-	return mockDatabase{s.Mock}, func() {}
-}
-
-func (s mockSession) Use(name string) datastore.Session {
-	return s
-}
 
 // mockDatabase acts as a mock datastore.Database
 type mockDatabase struct {
 	*mock.Mock
 }
 
-func (d mockDatabase) C(name string) datastore.Collection {
+func (d mockDatabase) Collection(name string) Collection {
 	return mockCollection{d.Mock}
 }
 
@@ -34,116 +20,47 @@ type mockCollection struct {
 	*mock.Mock
 }
 
-func (c mockCollection) Bulk() datastore.Bulk {
-	return mockBulk{c.Mock}
-}
-
-func (c mockCollection) Find(query interface{}) datastore.Query {
-	return mockQuery{c.Mock}
-}
-
-func (c mockCollection) FindId(id interface{}) datastore.Query {
-	return mockQuery{c.Mock}
-}
-
-func (c mockCollection) Insert(docs ...interface{}) error {
-	c.Called(docs...)
-	return nil
-}
-
-func (c mockCollection) Upsert(selector interface{}, update interface{}) (*mgo.ChangeInfo, error) {
-	return nil, nil
-}
-
-func (c mockCollection) UpsertId(selector interface{}, update interface{}) (*mgo.ChangeInfo, error) {
-	c.Called(selector, update)
-	return nil, nil
-}
-
-func (c mockCollection) UpdateId(selector, update interface{}) error {
-	args := c.Called(selector, update)
-	if len(args) > 0 {
-		return args.Error(0)
-	}
-	return nil
-}
-
-func (c mockCollection) Remove(selector interface{}) error {
-	return nil
-}
-
-func (c mockCollection) RemoveAll(selector interface{}) (*mgo.ChangeInfo, error) {
-	c.Called(selector)
-	return nil, nil
-}
-
-func (c mockCollection) Count() (int, error) {
-	return 0, nil
-}
-
-func (c mockCollection) Pipe(pipeline interface{}) datastore.Pipe {
-	return mockPipe{c.Mock}
-}
-
-// mockBulk acts as a mock datastore.Bulk
-type mockBulk struct {
+// mockBulkWriteReult acts as a mock datastore.Collection
+type mockBulkWriteResult struct {
 	*mock.Mock
 }
 
-func (b mockBulk) Upsert(pairs ...interface{}) {
-	b.Called(pairs)
-}
-
-func (b mockBulk) RemoveAll(selectors ...interface{}) {
-	b.Called(selectors)
-}
-
-func (b mockBulk) Run() (*mgo.BulkResult, error) {
-	return nil, nil
-}
-
-// mockQuery acts as a mock datastore.Query
-type mockQuery struct {
+// mockDeleteManyResult acts as a mock datastore.Collection
+type mockDeleteManyResult struct {
 	*mock.Mock
 }
 
-func (q mockQuery) All(result interface{}) error {
-	q.Called(result)
-	return nil
-}
-
-func (q mockQuery) One(result interface{}) error {
-	args := q.Called(result)
-	if len(args) > 0 {
-		return args.Error(0)
-	}
-	return nil
-}
-
-func (q mockQuery) Sort(fields ...string) datastore.Query {
-	return q
-}
-
-func (q mockQuery) Select(selector interface{}) datastore.Query {
-	return q
-}
-
-// mockPipe acts as a mock datastore.Pipe
-type mockPipe struct {
+// mockFindOneResult acts as a mock datastore.Collection
+type mockFindOneResult struct {
 	*mock.Mock
 }
 
-func (p mockPipe) All(result interface{}) error {
-	p.Called(result)
-	return nil
+// mockCollection acts as a mock datastore.Collection
+type mockInsertOneResult struct {
+	*mock.Mock
 }
 
-func (p mockPipe) One(result interface{}) error {
-	p.Called(result)
-	return nil
+func (c mockCollection) BulkWrite(ctxt context.Context, operations mongoWriteModels, options mongoBulkWriteOptions) (MongoResult, error) {
+	c.Called(ctxt, operations, options)
+	return mockBulkWriteResult{c.Mock}, nil
+}
+
+func (c mockCollection) DeleteMany(ctxt context.Context, filter interface{}, options mongoDeleteOptions) (MongoResult, error) {
+	c.Called(ctxt, filter, options)
+	return mockDeleteManyResult{c.Mock}, nil
+}
+
+func (c mockCollection) FindOne(ctxt context.Context, filter interface{}, options mongoFindOneOptions) MongoResult {
+	c.Called(ctxt, filter, options)
+	return mockFindOneResult{c.Mock}
+}
+
+func (c mockCollection) InsertOne(ctxt context.Context, document interface{}, options mongoInsertOneOptions) (MongoResult, error) {
+	c.Called(ctxt, document, options)
+	return mockFindOneResult{c.Mock}, nil
 }
 
 // NewMockSession returns a mocked Session
-func NewMockSession(m *mock.Mock) datastore.Session {
-	return mockSession{m}
+func NewMockDB(m *mock.Mock) Database {
+	return mockDatabase{m}
 }
