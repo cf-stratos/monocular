@@ -93,13 +93,19 @@ func init() {
 // charts before fetching readmes for each chart and version pair.
 func syncRepo(dbClient Client, dbName, repoName, repoURL string, authorizationHeader string) error {
 
+	url, err := parseRepoUrl(repoURL)
+	if err != nil {
+		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
+		return err
+	}
+
 	db, closer := dbClient.Database(dbName)
 	defer closer()
 
 	log.Infof("Checking database connection and readiness...")
 	collection := db.Collection("numbers")
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-	res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159}, &mongoInsertOneOptions{options.InsertOne()})
+	res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159}, options.InsertOne())
 	if err != nil {
 		log.Fatalf("Database readiness test failed: %v", err)
 		return err
@@ -107,12 +113,6 @@ func syncRepo(dbClient Client, dbName, repoName, repoURL string, authorizationHe
 	id := res.InsertedID
 	log.Infof("Database connection test successful.")
 	log.Debugf("Inserted a test document to test collection with ID: %v", id)
-
-	url, err := parseRepoUrl(repoURL)
-	if err != nil {
-		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
-		return err
-	}
 
 	r := types.Repo{Name: repoName, URL: url.String(), AuthorizationHeader: authorizationHeader}
 	index, err := fetchRepoIndex(r)
@@ -183,7 +183,7 @@ func deleteRepo(dbClient Client, dbName, repoName string) error {
 	filter := bson.M{
 		"repo.name": repoName,
 	}
-	deleteResult, err := collection.DeleteMany(context.Background(), filter, &mongoDeleteOptions{options.Delete()})
+	deleteResult, err := collection.DeleteMany(context.Background(), filter, options.Delete())
 	if err != nil {
 		log.Errorf("Error occurred during delete repo (deleting charts from index). Err: %v, Result: %v", err, deleteResult)
 		return err
@@ -191,7 +191,7 @@ func deleteRepo(dbClient Client, dbName, repoName string) error {
 	log.Debugf("Repo delete (delete charts from index) result: %v charts deleted", deleteResult.DeletedCount)
 
 	collection = db.Collection(chartFilesCollection)
-	deleteResult, err = collection.DeleteMany(context.Background(), filter, &mongoDeleteOptions{options.Delete()})
+	deleteResult, err = collection.DeleteMany(context.Background(), filter, options.Delete())
 	if err != nil {
 		log.Errorf("Error occurred during delete repo (deleting chart files from index). Err: %v, Result: %v", err, deleteResult)
 		return err
@@ -304,7 +304,7 @@ func importCharts(db Database, dbName string, charts []types.Chart) error {
 	updateResult, err := collection.BulkWrite(
 		context.Background(),
 		operations,
-		&mongoBulkWriteOptions{options.BulkWrite()},
+		options.BulkWrite(),
 	)
 
 	//Set upsert flag and upsert the pairs here
@@ -322,7 +322,7 @@ func importCharts(db Database, dbName string, charts []types.Chart) error {
 		},
 		"repo.name": charts[0].Repo.Name,
 	}
-	deleteResult, err := collection.DeleteMany(context.Background(), filter, &mongoDeleteOptions{options.Delete()})
+	deleteResult, err := collection.DeleteMany(context.Background(), filter, options.Delete())
 	if err != nil {
 		log.Errorf("Error occurred during chart import (delete many). Err: %v", err)
 		return err
@@ -390,7 +390,7 @@ func fetchAndImportIcon(db Database, c types.Chart) error {
 	//Update single icon
 	update := bson.M{"$set": bson.M{"raw_icon": b.Bytes()}}
 	filter := bson.M{"_id": c.ID}
-	updateResult, err := collection.UpdateOne(context.Background(), filter, update, &mongoUpdateOptions{options.Update()})
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update, options.Update())
 	if err != nil {
 		log.Errorf("Error occurred during chart icon import (update one). Err: %v, Result: %v", err, updateResult)
 		return err
@@ -404,7 +404,7 @@ func fetchAndImportFiles(db Database, name string, r types.Repo, cv types.ChartV
 	//Check if we already have indexed files for this chart version and digest
 	collection := db.Collection(chartFilesCollection)
 	filter := bson.M{"_id": chartFilesID, "digest": cv.Digest}
-	findResult := collection.FindOne(context.Background(), filter, &mongoFindOneOptions{options.FindOne()})
+	findResult := collection.FindOne(context.Background(), filter, options.FindOne())
 	if findResult.Decode(&types.ChartFiles{}) != mongo.ErrNoDocuments {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Debug("skipping existing files")
 		return nil
@@ -469,7 +469,7 @@ func fetchAndImportFiles(db Database, name string, r types.Repo, cv types.ChartV
 	bson.Unmarshal(chartBSON, &doc)
 	delete(doc, "_id")
 	update := bson.M{"$set": doc}
-	updateResult, err := collection.UpdateOne(context.Background(), filter, update, &mongoUpdateOptions{options.Update().SetUpsert(true)})
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update, options.Update().SetUpsert(true))
 	if err != nil {
 		log.Errorf("Error occurred during chart files import (update one). Chart files : %v doc: %v  Err: %v", chartFiles, doc, err)
 		return err

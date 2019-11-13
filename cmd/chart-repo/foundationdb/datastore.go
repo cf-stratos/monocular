@@ -48,11 +48,11 @@ type Database interface {
 
 // Collection is an interface for accessing a MongoDB collection
 type Collection interface {
-	BulkWrite(ctxt context.Context, operations []mongo.WriteModel, options *mongoBulkWriteOptions) (*mongo.BulkWriteResult, error)
-	DeleteMany(ctxt context.Context, filter interface{}, options *mongoDeleteOptions) (*mongo.DeleteResult, error)
-	FindOne(ctxt context.Context, filter interface{}, options *mongoFindOneOptions) *mongo.SingleResult
-	InsertOne(ctxt context.Context, document interface{}, options *mongoInsertOneOptions) (*mongo.InsertOneResult, error)
-	UpdateOne(ctxt context.Context, filter interface{}, update interface{}, options *mongoUpdateOptions) (*mongo.UpdateResult, error)
+	BulkWrite(ctxt context.Context, operations []mongo.WriteModel, options *options.BulkWriteOptions) (*mongo.BulkWriteResult, error)
+	DeleteMany(ctxt context.Context, filter interface{}, options *options.DeleteOptions) (*mongo.DeleteResult, error)
+	FindOne(ctxt context.Context, filter interface{}, options *options.FindOneOptions) *mongo.SingleResult
+	InsertOne(ctxt context.Context, document interface{}, options *options.InsertOneOptions) (*mongo.InsertOneResult, error)
+	UpdateOne(ctxt context.Context, filter interface{}, update interface{}, options *options.UpdateOptions) (*mongo.UpdateResult, error)
 }
 
 // mgoDatabase wraps an mgo.Database and implements Database
@@ -93,25 +93,25 @@ type mongoCollection struct {
 	Collection *mongo.Collection
 }
 
-type mongoFindOneOptions struct {
-	FindOneOptions *options.FindOneOptions
-}
+// type mongoFindOneOptions struct {
+// 	FindOneOptions *options.FindOneOptions
+// }
 
-type mongoDeleteOptions struct {
-	DeleteOptions *options.DeleteOptions
-}
+// type mongoDeleteOptions struct {
+// 	DeleteOptions *options.DeleteOptions
+// }
 
-type mongoBulkWriteOptions struct {
-	BulkWriteOptions *options.BulkWriteOptions
-}
+// type mongoBulkWriteOptions struct {
+// 	BulkWriteOptions *options.BulkWriteOptions
+// }
 
-type mongoInsertOneOptions struct {
-	InsertOneOptions *options.InsertOneOptions
-}
+// type mongoInsertOneOptions struct {
+// 	InsertOneOptions *options.InsertOneOptions
+// }
 
-type mongoUpdateOptions struct {
-	UpdateOneOptions *options.UpdateOptions
-}
+// type mongoUpdateOptions struct {
+// 	UpdateOneOptions *options.UpdateOptions
+// }
 
 // type mongoFindOneResult struct {
 // 	FindOneResult *mongo.SingleResult
@@ -137,27 +137,27 @@ type mongoUpdateOptions struct {
 // 	WriteModels *[]mongo.WriteModel
 // }
 
-func (c *mongoCollection) BulkWrite(ctxt context.Context, operations []mongo.WriteModel, options *mongoBulkWriteOptions) (*mongo.BulkWriteResult, error) {
-	res, err := c.Collection.BulkWrite(ctxt, operations, options.BulkWriteOptions)
+func (c *mongoCollection) BulkWrite(ctxt context.Context, operations []mongo.WriteModel, options *options.BulkWriteOptions) (*mongo.BulkWriteResult, error) {
+	res, err := c.Collection.BulkWrite(ctxt, operations, options)
 	return res, err
 }
 
-func (c *mongoCollection) DeleteMany(ctxt context.Context, filter interface{}, options *mongoDeleteOptions) (*mongo.DeleteResult, error) {
-	res, err := c.Collection.DeleteMany(ctxt, filter, options.DeleteOptions)
+func (c *mongoCollection) DeleteMany(ctxt context.Context, filter interface{}, options *options.DeleteOptions) (*mongo.DeleteResult, error) {
+	res, err := c.Collection.DeleteMany(ctxt, filter, options)
 	return res, err
 }
 
-func (c *mongoCollection) FindOne(ctxt context.Context, filter interface{}, options *mongoFindOneOptions) *mongo.SingleResult {
-	res := c.Collection.FindOne(ctxt, filter, options.FindOneOptions)
+func (c *mongoCollection) FindOne(ctxt context.Context, filter interface{}, options *options.FindOneOptions) *mongo.SingleResult {
+	res := c.Collection.FindOne(ctxt, filter, options)
 	return res
 }
 
-func (c *mongoCollection) InsertOne(ctxt context.Context, document interface{}, options *mongoInsertOneOptions) (*mongo.InsertOneResult, error) {
-	res, err := c.Collection.InsertOne(ctxt, document, options.InsertOneOptions)
+func (c *mongoCollection) InsertOne(ctxt context.Context, document interface{}, options *options.InsertOneOptions) (*mongo.InsertOneResult, error) {
+	res, err := c.Collection.InsertOne(ctxt, document, options)
 	return res, err
 }
 
-func (c *mongoCollection) UpdateOne(ctxt context.Context, filter interface{}, document interface{}, options *mongoUpdateOptions) (*mongo.UpdateResult, error) {
-	res, err := c.Collection.UpdateOne(ctxt, filter, document, options.UpdateOneOptions)
+func (c *mongoCollection) UpdateOne(ctxt context.Context, filter interface{}, document interface{}, options *options.UpdateOptions) (*mongo.UpdateResult, error) {
+	res, err := c.Collection.UpdateOne(ctxt, filter, document, options)
 	return res, err
 }

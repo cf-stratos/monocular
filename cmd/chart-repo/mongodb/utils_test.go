@@ -45,7 +45,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-var validRepoIndexYAMLBytes, _ = ioutil.ReadFile("testdata/valid-index.yaml")
+var validRepoIndexYAMLBytes, _ = ioutil.ReadFile("../testdata/valid-index.yaml")
 var validRepoIndexYAML = string(validRepoIndexYAMLBytes)
 
 var invalidRepoIndexYAML = "invalid"

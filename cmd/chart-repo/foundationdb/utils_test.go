@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -39,13 +38,13 @@ import (
 
 	"github.com/arschles/assert"
 	"github.com/disintegration/imaging"
-	"github.com/globalsign/mgo/bson"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/mock"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var validRepoIndexYAMLBytes, _ = ioutil.ReadFile("testdata/valid-index.yaml")
+var validRepoIndexYAMLBytes, _ = ioutil.ReadFile("../testdata/valid-index.yaml")
 var validRepoIndexYAML = string(validRepoIndexYAMLBytes)
 
 var invalidRepoIndexYAML = "invalid"
@@ -279,8 +278,8 @@ func Test_newChart(t *testing.T) {
 func Test_importCharts(t *testing.T) {
 	m := &mock.Mock{}
 	// Ensure Upsert func is called with some arguments
-	m.On("BulkWrite", mock.Anything)
-	m.On("DeleteMany", mock.Anything)
+	m.On("BulkWrite", mock.Anything, mock.Anything, mock.Anything).Return(&mongo.BulkWriteResult{}, nil)
+	m.On("DeleteMany", mock.Anything, mock.Anything, mock.Anything).Return(&mongo.DeleteResult{}, nil)
 	dbClient := NewMockClient(m)
 	db, _ := dbClient.Database("test")
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
@@ -291,19 +290,19 @@ func Test_importCharts(t *testing.T) {
 	// The BulkWrite method takes an array of WriteModels.
 	// For x charts to upsert, there should be x elements.
 	// Each element has a selector (filter) and an "update" - the update document to apply
-	args := m.Calls[0].Arguments.Get(1).([]interface{})
+	args := m.Calls[0].Arguments.Get(1).([]mongo.WriteModel)
 	assert.Equal(t, len(args), len(charts), "number of charts to upsert")
 	for i := 0; i < len(args); i++ {
-		updateModel := args[i].(mongo.UpdateOneModel)
+		updateModel := args[i].(*mongo.UpdateOneModel)
 		assert.Equal(t, updateModel.Filter, bson.M{"_id": "test/" + updateModel.Update.(bson.M)["name"].(string)}, "selector")
 	}
 }
 
 func Test_DeleteRepo(t *testing.T) {
 	m := &mock.Mock{}
-	m.On("DeleteMany", bson.M{
+	m.On("DeleteMany", mock.Anything, bson.M{
 		"repo.name": "test",
-	})
+	}, mock.Anything).Return(&mongo.DeleteResult{}, nil)
 	dbClient := NewMockClient(m)
 
 	err := deleteRepo(dbClient, "test", "test")
@@ -349,7 +348,7 @@ func Test_fetchAndImportIcon(t *testing.T) {
 		m := mock.Mock{}
 		dbClient := NewMockClient(&m)
 		db, _ := dbClient.Database("test")
-		m.On("UpdateId", c.ID, bson.M{"$set": bson.M{"raw_icon": iconBytes()}}).Return(nil)
+		m.On("UpdateOne", mock.Anything, bson.M{"_id": c.ID}, bson.M{"$set": bson.M{"raw_icon": iconBytes()}}, mock.Anything).Return(&mongo.UpdateResult{}, nil)
 		assert.NoErr(t, fetchAndImportIcon(db, c))
 		m.AssertExpectations(t)
 	})
@@ -362,7 +361,7 @@ func Test_fetchAndImportFiles(t *testing.T) {
 
 	t.Run("http error", func(t *testing.T) {
 		m := mock.Mock{}
-		m.On("One", mock.Anything).Return(errors.New("return an error when checking if readme already exists to force fetching"))
+		m.On("FindOne", mock.Anything, mock.Anything, mock.Anything).Return(&mongo.SingleResult{})
 		dbClient := NewMockClient(&m)
 		db, _ := dbClient.Database("test")
 		netClient = &badHTTPClient{}
@@ -372,9 +371,15 @@ func Test_fetchAndImportFiles(t *testing.T) {
 	t.Run("file not found", func(t *testing.T) {
 		netClient = &goodTarballClient{c: charts[0], skipValues: true, skipReadme: true}
 		m := mock.Mock{}
-		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
+		m.On("FindOne", mock.Anything, mock.Anything, mock.Anything).Return(&mongo.SingleResult{})
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, "", "", charts[0].Repo, cv.Digest})
+		chartFiles := types.ChartFiles{chartFilesID, "", "", charts[0].Repo, cv.Digest}
+		chartBSON, _ := bson.Marshal(&chartFiles)
+		var doc bson.M
+		bson.Unmarshal(chartBSON, &doc)
+		delete(doc, "_id")
+		update := bson.M{"$set": doc}
+		m.On("InsertOne", mock.Anything, bson.M{"_id": chartFilesID}, update, mock.Anything).Return(&mongo.UpdateResult{}, nil)
 		dbClient := NewMockClient(&m)
 		db, _ := dbClient.Database("test")
 		err := fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv)
@@ -385,9 +390,15 @@ func Test_fetchAndImportFiles(t *testing.T) {
 	t.Run("authenticated request", func(t *testing.T) {
 		netClient = &authenticatedTarballClient{c: charts[0]}
 		m := mock.Mock{}
-		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
+		m.On("FindOne", mock.Anything, mock.Anything, mock.Anything).Return(&mongo.SingleResult{})
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest})
+		chartFiles := types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest}
+		chartBSON, _ := bson.Marshal(&chartFiles)
+		var doc bson.M
+		bson.Unmarshal(chartBSON, &doc)
+		delete(doc, "_id")
+		update := bson.M{"$set": doc}
+		m.On("InsertOne", mock.Anything, bson.M{"_id": chartFilesID}, update, mock.Anything).Return(&mongo.UpdateResult{}, nil)
 		dbClient := NewMockClient(&m)
 		db, _ := dbClient.Database("test")
 		err := fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv)
@@ -398,9 +409,15 @@ func Test_fetchAndImportFiles(t *testing.T) {
 	t.Run("valid tarball", func(t *testing.T) {
 		netClient = &goodTarballClient{c: charts[0]}
 		m := mock.Mock{}
-		m.On("One", mock.Anything).Return(errors.New("return an error when checking if files already exists to force fetching"))
+		m.On("FindOne", mock.Anything, mock.Anything, mock.Anything).Return(&mongo.SingleResult{})
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		m.On("UpsertId", chartFilesID, types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest})
+		chartFiles := types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest}
+		chartBSON, _ := bson.Marshal(&chartFiles)
+		var doc bson.M
+		bson.Unmarshal(chartBSON, &doc)
+		delete(doc, "_id")
+		update := bson.M{"$set": doc}
+		m.On("InsertOne", mock.Anything, bson.M{"_id": chartFilesID}, update, mock.Anything).Return(&mongo.UpdateResult{}, nil)
 		dbClient := NewMockClient(&m)
 		db, _ := dbClient.Database("test")
 		err := fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv)
@@ -411,12 +428,12 @@ func Test_fetchAndImportFiles(t *testing.T) {
 	t.Run("file exists", func(t *testing.T) {
 		m := mock.Mock{}
 		// don't return an error when checking if files already exists
-		m.On("One", mock.Anything).Return(nil)
+		m.On("FindOne", mock.Anything, mock.Anything, mock.Anything).Return(&mongo.SingleResult{})
 		dbClient := NewMockClient(&m)
 		db, _ := dbClient.Database("test")
 		err := fetchAndImportFiles(db, charts[0].Name, charts[0].Repo, cv)
 		assert.NoErr(t, err)
-		m.AssertNotCalled(t, "UpsertId", mock.Anything, mock.Anything)
+		m.AssertNotCalled(t, "InsertOne", mock.Anything, mock.Anything, mock.Anything)
 	})
 }
 
