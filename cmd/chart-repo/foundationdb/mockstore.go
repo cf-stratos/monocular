@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/stretchr/testify/mock"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // mockDatabase acts as a mock datastore.Database
@@ -30,7 +31,7 @@ func (c mockClient) Database(dbName string) (Database, func()) {
 }
 
 func (d mockDatabase) Collection(name string) Collection {
-	return mockCollection{d.Mock}
+	return &mockCollection{d.Mock}
 }
 
 // mockCollection acts as a mock datastore.Collection
@@ -38,13 +39,13 @@ type mockCollection struct {
 	*mock.Mock
 }
 
-// mockBulkWriteReult acts as a mock datastore.Collection
+/* // mockBulkWriteReult acts as a mock datastore.Collection
 type mockBulkWriteResult struct {
 	*mock.Mock
 }
 
 // mockDeleteManyResult acts as a mock datastore.Collection
-type mockDeleteManyResult struct {
+type mockDeleteResult struct {
 	*mock.Mock
 }
 
@@ -56,24 +57,29 @@ type mockFindOneResult struct {
 // mockCollection acts as a mock datastore.Collection
 type mockInsertOneResult struct {
 	*mock.Mock
+} */
+
+func (c mockCollection) BulkWrite(ctxt context.Context, operations []mongo.WriteModel, options *mongoBulkWriteOptions) (*mongo.BulkWriteResult, error) {
+	args := c.Called(ctxt, operations, options)
+	return args.Get(0).(*mongo.BulkWriteResult), args.Error(1)
 }
 
-func (c mockCollection) BulkWrite(ctxt context.Context, operations mongoWriteModels, options mongoBulkWriteOptions) (MongoResult, error) {
-	c.Called(ctxt, operations, options)
-	return mockBulkWriteResult{c.Mock}, nil
+func (c mockCollection) DeleteMany(ctxt context.Context, filter interface{}, options *mongoDeleteOptions) (*mongo.DeleteResult, error) {
+	args := c.Called(ctxt, filter, options)
+	return args.Get(0).(*mongo.DeleteResult), args.Error(1)
 }
 
-func (c mockCollection) DeleteMany(ctxt context.Context, filter interface{}, options mongoDeleteOptions) (MongoResult, error) {
-	c.Called(ctxt, filter, options)
-	return mockDeleteManyResult{c.Mock}, nil
+func (c mockCollection) FindOne(ctxt context.Context, filter interface{}, options *mongoFindOneOptions) *mongo.SingleResult {
+	args := c.Called(ctxt, filter, options)
+	return args.Get(0).(*mongo.SingleResult)
 }
 
-func (c mockCollection) FindOne(ctxt context.Context, filter interface{}, options mongoFindOneOptions) MongoResult {
-	c.Called(ctxt, filter, options)
-	return mockFindOneResult{c.Mock}
+func (c mockCollection) InsertOne(ctxt context.Context, document interface{}, options *mongoInsertOneOptions) (*mongo.InsertOneResult, error) {
+	args := c.Called(ctxt, document, options)
+	return args.Get(0).(*mongo.InsertOneResult), args.Error(1)
 }
 
-func (c mockCollection) InsertOne(ctxt context.Context, document interface{}, options mongoInsertOneOptions) (MongoResult, error) {
-	c.Called(ctxt, document, options)
-	return mockFindOneResult{c.Mock}, nil
+func (c mockCollection) UpdateOne(ctxt context.Context, filter interface{}, document interface{}, options *mongoUpdateOptions) (*mongo.UpdateResult, error) {
+	args := c.Called(ctxt, document, options)
+	return args.Get(0).(*mongo.UpdateResult), args.Error(1)
 }

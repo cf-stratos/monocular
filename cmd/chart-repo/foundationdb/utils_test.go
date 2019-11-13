@@ -42,6 +42,7 @@ import (
 	"github.com/globalsign/mgo/bson"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/mock"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var validRepoIndexYAMLBytes, _ = ioutil.ReadFile("testdata/valid-index.yaml")
@@ -278,8 +279,8 @@ func Test_newChart(t *testing.T) {
 func Test_importCharts(t *testing.T) {
 	m := &mock.Mock{}
 	// Ensure Upsert func is called with some arguments
-	m.On("Upsert", mock.Anything)
-	m.On("RemoveAll", mock.Anything)
+	m.On("BulkWrite", mock.Anything)
+	m.On("DeleteMany", mock.Anything)
 	dbClient := NewMockClient(m)
 	db, _ := dbClient.Database("test")
 	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
@@ -287,20 +288,20 @@ func Test_importCharts(t *testing.T) {
 	importCharts(db, "test", charts)
 
 	m.AssertExpectations(t)
-	// The Bulk Upsert method takes an array that consists of a selector followed by an interface to upsert.
-	// So for x charts to upsert, there should be x*2 elements (each chart has it's own selector)
-	// e.g. [selector1, chart1, selector2, chart2, ...]
-	args := m.Calls[0].Arguments.Get(0).([]interface{})
-	assert.Equal(t, len(args), len(charts)*2, "number of selector, chart pairs to upsert")
-	for i := 0; i < len(args); i += 2 {
-		c := args[i+1].(types.Chart)
-		assert.Equal(t, args[i], bson.M{"_id": "test/" + c.Name}, "selector")
+	// The BulkWrite method takes an array of WriteModels.
+	// For x charts to upsert, there should be x elements.
+	// Each element has a selector (filter) and an "update" - the update document to apply
+	args := m.Calls[0].Arguments.Get(1).([]interface{})
+	assert.Equal(t, len(args), len(charts), "number of charts to upsert")
+	for i := 0; i < len(args); i++ {
+		updateModel := args[i].(mongo.UpdateOneModel)
+		assert.Equal(t, updateModel.Filter, bson.M{"_id": "test/" + updateModel.Update.(bson.M)["name"].(string)}, "selector")
 	}
 }
 
 func Test_DeleteRepo(t *testing.T) {
 	m := &mock.Mock{}
-	m.On("RemoveAll", bson.M{
+	m.On("DeleteMany", bson.M{
 		"repo.name": "test",
 	})
 	dbClient := NewMockClient(m)
@@ -579,7 +580,6 @@ func Test_emptyChartRepo(t *testing.T) {
 	netClient = &emptyChartRepoHTTPClient{}
 	m := mock.Mock{}
 	dbClient := NewMockClient(&m)
-	db, _ := dbClient.Database("test")
 	err := syncRepo(dbClient, "test", "testRepo", "https://my.examplerepo.com", "")
 	assert.ExistsErr(t, err, "Failed Request")
 }
