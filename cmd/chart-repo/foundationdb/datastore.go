@@ -46,19 +46,14 @@ type Database interface {
 	Collection(name string) Collection
 }
 
-type mongoBulkWriteResult struct {
-	BulkWriteResult mongo.BulkWriteResult
-}
-
 // Collection is an interface for accessing a MongoDB collection
 type Collection interface {
-	BulkWrite(ctxt context.Context, operations mongoWriteModels, options mongoBulkWriteOptions) (MongoResult, error)
-	DeleteMany(ctxt context.Context, filter interface{}, options mongoDeleteOptions) (MongoResult, error)
-	FindOne(ctxt context.Context, filter interface{}, options mongoFindOneOptions) MongoResult
-	InsertOne(ctxt context.Context, document interface{}, options mongoInsertOneOptions) (MongoResult, error)
+	BulkWrite(ctxt context.Context, operations mongoWriteModels, options mongoBulkWriteOptions) (*mongo.BulkWriteResult, error)
+	DeleteMany(ctxt context.Context, filter interface{}, options mongoDeleteOptions) (*mongo.DeleteResult, error)
+	FindOne(ctxt context.Context, filter interface{}, options mongoFindOneOptions) *mongo.SingleResult
+	InsertOne(ctxt context.Context, document interface{}, options mongoInsertOneOptions) (*mongo.InsertOneResult, error)
+	UpdateOne(ctxt context.Context, filter interface{}, update interface{}, options mongoUpdateOptions) (*mongo.UpdateResult, error)
 }
-
-type MongoResult interface{}
 
 // mgoDatabase wraps an mgo.Database and implements Database
 type mongoDatabase struct {
@@ -109,22 +104,30 @@ type mongoInsertOneOptions struct {
 	InsertOneOptions *options.InsertOneOptions
 }
 
+type mongoUpdateOptions struct {
+	UpdateOneOptions *options.UpdateOptions
+}
+
 type mongoWriteModels struct {
-	WriteModels []mongo.WriteModel
+	WriteModels *[]mongo.WriteModel
 }
 
-func (c *mongoCollection) BulkWrite(ctxt context.Context, operations mongoWriteModels, options mongoBulkWriteOptions) (MongoResult, error) {
-	return c.Collection.BulkWrite(ctxt, operations.WriteModels, options.BulkWriteOptions)
+func (c *mongoCollection) BulkWrite(ctxt context.Context, operations mongoWriteModels, options mongoBulkWriteOptions) (*mongo.BulkWriteResult, error) {
+	return c.Collection.BulkWrite(ctxt, *operations.WriteModels, options.BulkWriteOptions)
 }
 
-func (c *mongoCollection) DeleteMany(ctxt context.Context, filter interface{}, options mongoDeleteOptions) (MongoResult, error) {
+func (c *mongoCollection) DeleteMany(ctxt context.Context, filter interface{}, options mongoDeleteOptions) (*mongo.DeleteResult, error) {
 	return c.Collection.DeleteMany(ctxt, filter, options.DeleteOptions)
 }
 
-func (c *mongoCollection) FindOne(ctxt context.Context, filter interface{}, options mongoFindOneOptions) MongoResult {
+func (c *mongoCollection) FindOne(ctxt context.Context, filter interface{}, options mongoFindOneOptions) *mongo.SingleResult {
 	return c.Collection.FindOne(ctxt, filter, options.FindOneOptions)
 }
 
-func (c *mongoCollection) InsertOne(ctxt context.Context, document interface{}, options mongoInsertOneOptions) (MongoResult, error) {
+func (c *mongoCollection) InsertOne(ctxt context.Context, document interface{}, options mongoInsertOneOptions) (*mongo.InsertOneResult, error) {
 	return c.Collection.InsertOne(ctxt, document, options.InsertOneOptions)
+}
+
+func (c *mongoCollection) UpdateOne(ctxt context.Context, filter interface{}, document interface{}, options mongoUpdateOptions) (*mongo.UpdateResult, error) {
+	return c.Collection.UpdateOne(ctxt, filter, document, options.UpdateOneOptions)
 }
