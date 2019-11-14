@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"image/color"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +34,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -223,6 +224,7 @@ func Test_newChartVersionListResponse(t *testing.T) {
 }
 
 func Test_listCharts(t *testing.T) {
+	pageSize := 2
 	tests := []struct {
 		name   string
 		query  string
@@ -238,7 +240,7 @@ func Test_listCharts(t *testing.T) {
 			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
 		}, meta{1}},
 		// Pagination tests
-		{"four charts with pagination", "?size=2", []*models.Chart{
+		{"four charts with pagination", "?size=" + strconv.Itoa(pageSize), []*models.Chart{
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}}},
 			{ID: "stable/drupal", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "12345"}}},
@@ -252,8 +254,7 @@ func Test_listCharts(t *testing.T) {
 			dbClient = NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
-			//TODO modify find to return chart model array instead of mongo cursor
-			m.On("Find", mock.Anything, bson.M{"repo.name": ""}, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
+			m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 				*args.Get(2).(*[]*models.Chart) = tt.charts
 			})
 
@@ -270,7 +271,11 @@ func Test_listCharts(t *testing.T) {
 				t.Fatal("chart list shouldn't be null")
 			}
 			data := *b.Data
-			assert.Len(t, data, len(tt.charts))
+			if tt.query == "" {
+				assert.Len(t, data, len(tt.charts))
+			} else {
+				assert.Len(t, data, pageSize)
+			}
 			for i, resp := range data {
 				assert.Equal(t, resp.ID, tt.charts[i].ID, "chart id in the response should be the same")
 				assert.Equal(t, resp.Type, "chart", "response type is chart")
@@ -283,6 +288,7 @@ func Test_listCharts(t *testing.T) {
 }
 
 func Test_listRepoCharts(t *testing.T) {
+	pageSize := 2
 	tests := []struct {
 		name   string
 		repo   string
@@ -298,7 +304,7 @@ func Test_listRepoCharts(t *testing.T) {
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 			{ID: "my-repo/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
 		}, meta{1}},
-		{"repo has many charts with pagination", "my-repo", "?size=2", []*models.Chart{
+		{"repo has many charts with pagination", "my-repo", "?size=" + strconv.Itoa(pageSize), []*models.Chart{
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}}},
 			{ID: "stable/drupal", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "12345"}}},
@@ -312,7 +318,7 @@ func Test_listRepoCharts(t *testing.T) {
 			dbClient = NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
-			m.On("Find", mock.Anything, bson.M{"repo.name": "my-repo"}, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
+			m.On("Find", mock.Anything, bson.M{"repo.name": "my-repo"}, &chartsList, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 				*args.Get(2).(*[]*models.Chart) = tt.charts
 			})
 
@@ -330,7 +336,11 @@ func Test_listRepoCharts(t *testing.T) {
 			var b bodyAPIListResponse
 			json.NewDecoder(w.Body).Decode(&b)
 			data := *b.Data
-			assert.Len(t, data, len(tt.charts))
+			if tt.query == "" {
+				assert.Len(t, data, len(tt.charts))
+			} else {
+				assert.Len(t, data, pageSize)
+			}
 			for i, resp := range data {
 				assert.Equal(t, resp.ID, tt.charts[i].ID, "chart id in the response should be the same")
 				assert.Equal(t, resp.Type, "chart", "response type is chart")
@@ -350,7 +360,7 @@ func Test_getChart(t *testing.T) {
 	}{
 		{
 			"chart does not exist",
-			errors.New("return an error when checking if chart exists"),
+			mongo.ErrNoDocuments,
 			models.Chart{ID: "my-repo/my-chart"},
 			http.StatusNotFound,
 		},
@@ -415,7 +425,7 @@ func Test_listChartVersions(t *testing.T) {
 	}{
 		{
 			"chart does not exist",
-			errors.New("return an error when checking if chart exists"),
+			mongo.ErrNoDocuments,
 			models.Chart{ID: "my-repo/my-chart"},
 			http.StatusNotFound,
 		},
@@ -482,7 +492,7 @@ func Test_getChartVersion(t *testing.T) {
 	}{
 		{
 			"chart does not exist",
-			errors.New("return an error when checking if chart exists"),
+			mongo.ErrNoDocuments,
 			models.Chart{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.1.0"}}},
 			http.StatusNotFound,
 		},
@@ -547,7 +557,7 @@ func Test_getChartIcon(t *testing.T) {
 	}{
 		{
 			"chart does not exist",
-			errors.New("return an error when checking if chart exists"),
+			mongo.ErrNoDocuments,
 			models.Chart{ID: "my-repo/my-chart"},
 			http.StatusNotFound,
 		},
@@ -609,7 +619,7 @@ func Test_getChartVersionReadme(t *testing.T) {
 		{
 			"chart does not exist",
 			"0.1.0",
-			errors.New("return an error when checking if chart exists"),
+			mongo.ErrNoDocuments,
 			models.ChartFiles{ID: "my-repo/my-chart"},
 			http.StatusNotFound,
 		},
@@ -674,7 +684,7 @@ func Test_getChartVersionValues(t *testing.T) {
 		{
 			"chart does not exist",
 			"0.1.0",
-			errors.New("return an error when checking if chart exists"),
+			mongo.ErrNoDocuments,
 			models.ChartFiles{ID: "my-repo/my-chart"},
 			http.StatusNotFound,
 		},
@@ -747,9 +757,9 @@ func Test_findLatestChart(t *testing.T) {
 		dbClient = NewMockClient(&m)
 		db, _ = dbClient.Database("test")
 
-		m.On("Find", mock.Anything, bson.M{"repo.name": "bar"}, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
+		m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
 			*args.Get(2).(*[]*models.Chart) = charts
-		})
+		}).Return(nil)
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", "/charts?name="+chart.Name+"&version="+reqVersion+"&appversion="+reqAppVersion, nil)
@@ -784,9 +794,9 @@ func Test_findLatestChart(t *testing.T) {
 		dbClient = NewMockClient(&m)
 		db, _ = dbClient.Database("test")
 
-		m.On("Find", mock.Anything, bson.M{"repo.name": "bar"}, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
+		m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
 			*args.Get(2).(*[]*models.Chart) = charts
-		})
+		}).Return(nil)
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", "/charts?name="+charts[0].Name+"&version="+reqVersion+"&appversion="+reqAppVersion, nil)

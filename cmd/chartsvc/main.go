@@ -66,20 +66,6 @@ func setupRoutes() http.Handler {
 }
 
 func main() {
-	// dbURL := flag.String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-	// log.Debugf("Mongo DB connnection: %v %v %v")
-	// dbName := flag.String("mongo-database", "charts", "MongoDB database")
-	// dbUsername := flag.String("mongo-user", "", "MongoDB user")
-	// dbPassword := os.Getenv("MONGO_PASSWORD")
-	// flag.Parse()
-
-	// log.Infof("Mongo DB connnection: %v %v %v %v", *dbURL, *dbName, *dbUsername, dbPassword)
-	// mongoConfig := datastore.Config{URL: *dbURL, Database: *dbName, Username: *dbUsername, Password: dbPassword}
-	// var err error
-	// dbSession, err = datastore.NewSession(mongoConfig)
-	// if err != nil {
-	// 	log.WithFields(log.Fields{"host": *dbURL}).Fatal(err)
-	// }
 
 	fdbURL := flag.String("mongo-url", "mongodb://fdb-service/27016", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
 	fDB := flag.String("mongo-database", "charts", "MongoDB database")
@@ -91,21 +77,13 @@ func main() {
 	log.Infof("Attempting to connect to FDB: %v, %v, %v", *fdbURL, *fDB, *debug)
 
 	clientOptions := options.Client().ApplyURI(*fdbURL)
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	client, err := fdb.NewDocLayerClient(context.Background(), clientOptions)
 	if err != nil {
 		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
 		return
 	} else {
 		log.Infof("Client created.")
 	}
-	//ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-	//err = client.Ping(ctx, readpref.Primary())
-	//if err != nil {
-	//	log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
-	//	return
-	//} else {
-	//		log.Info("Successfully connected to FoundationDB document layer.")
-	//}
 
 	fdb.InitDBConfig(client, *fDB)
 	fdb.SetPathPrefix(pathPrefix)

@@ -142,8 +142,8 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	if repo != "" {
 		filter = bson.M{"repo.name": repo}
 	}
-	charts := []*models.Chart{}
-	err := collection.Find(context.Background(), filter, charts, options.Find())
+	var charts []*models.Chart
+	err := collection.Find(context.Background(), filter, &charts, options.Find())
 	if err != nil {
 		log.WithError(err).Errorf(
 			"Error fetching charts from DB for pagination %s",
@@ -191,7 +191,7 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 		paginatedCharts = sortedCharts[(pageNumber-1)*pageSize : pageNumber*pageSize]
 	}
 
-	log.Info("Done.")
+	log.Infof("Returning %v charts, Done.", len(paginatedCharts))
 	return newChartListResponse(paginatedCharts), meta{totalPages}, nil
 }
 

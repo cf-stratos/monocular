@@ -86,6 +86,6 @@ func (c mockCollection) UpdateOne(ctxt context.Context, filter interface{}, docu
 }
 
 func (c mockCollection) Find(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOptions) error {
-	args := c.Called(ctxt, filter, options)
+	args := c.Called(ctxt, filter, result, options)
 	return args.Error(0)
 }
