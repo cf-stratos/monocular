@@ -50,7 +50,7 @@ type Database interface {
 type Collection interface {
 	BulkWrite(ctxt context.Context, operations []mongo.WriteModel, options *options.BulkWriteOptions) (*mongo.BulkWriteResult, error)
 	DeleteMany(ctxt context.Context, filter interface{}, options *options.DeleteOptions) (*mongo.DeleteResult, error)
-	FindOne(ctxt context.Context, filter interface{}, options *options.FindOneOptions) *mongo.SingleResult
+	FindOne(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOneOptions) error
 	InsertOne(ctxt context.Context, document interface{}, options *options.InsertOneOptions) (*mongo.InsertOneResult, error)
 	UpdateOne(ctxt context.Context, filter interface{}, update interface{}, options *options.UpdateOptions) (*mongo.UpdateResult, error)
 }
@@ -147,9 +147,9 @@ func (c *mongoCollection) DeleteMany(ctxt context.Context, filter interface{}, o
 	return res, err
 }
 
-func (c *mongoCollection) FindOne(ctxt context.Context, filter interface{}, options *options.FindOneOptions) *mongo.SingleResult {
+func (c *mongoCollection) FindOne(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOneOptions) error {
 	res := c.Collection.FindOne(ctxt, filter, options)
-	return res
+	return res.Decode(result)
 }
 
 func (c *mongoCollection) InsertOne(ctxt context.Context, document interface{}, options *options.InsertOneOptions) (*mongo.InsertOneResult, error) {

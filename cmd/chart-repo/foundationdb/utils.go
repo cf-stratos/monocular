@@ -404,8 +404,8 @@ func fetchAndImportFiles(db Database, name string, r types.Repo, cv types.ChartV
 	//Check if we already have indexed files for this chart version and digest
 	collection := db.Collection(chartFilesCollection)
 	filter := bson.M{"_id": chartFilesID, "digest": cv.Digest}
-	findResult := collection.FindOne(context.Background(), filter, options.FindOne())
-	if findResult.Decode(&types.ChartFiles{}) != mongo.ErrNoDocuments {
+	findResult := collection.FindOne(context.Background(), filter, &types.ChartFiles{}, options.FindOne())
+	if findResult != mongo.ErrNoDocuments {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Debug("skipping existing files")
 		return nil
 	}

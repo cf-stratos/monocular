@@ -70,9 +70,9 @@ func (c mockCollection) DeleteMany(ctxt context.Context, filter interface{}, opt
 	return args.Get(0).(*mongo.DeleteResult), args.Error(1)
 }
 
-func (c mockCollection) FindOne(ctxt context.Context, filter interface{}, options *options.FindOneOptions) *mongo.SingleResult {
-	args := c.Called(ctxt, filter, options)
-	return args.Get(0).(*mongo.SingleResult)
+func (c mockCollection) FindOne(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOneOptions) error {
+	args := c.Called(ctxt, filter, result, options)
+	return args.Error(0)
 }
 
 func (c mockCollection) InsertOne(ctxt context.Context, document interface{}, options *options.InsertOneOptions) (*mongo.InsertOneResult, error) {
