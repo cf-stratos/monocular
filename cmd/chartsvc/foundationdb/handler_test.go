@@ -31,12 +31,10 @@ import (
 	"local/monocular/cmd/chartsvc/models"
 
 	"github.com/disintegration/imaging"
-	"github.com/kubeapps/common/datastore/mockstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 type bodyAPIListResponse struct {
@@ -251,14 +249,20 @@ func Test_listCharts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-				m.On("All", &chartsList).Run(func(args mock.Arguments) {
-					*args.Get(0).(*[]*models.Chart) = tt.charts
-				})
-			if tt.query != "" {
-				m.On("One", &cc).Run(func(args mock.Arguments) {
-					*args.Get(0).(*count) = count{len(tt.charts)}
-				})
-			}
+			dbClient = NewMockClient(&m)
+			db, _ = dbClient.Database("test")
+
+			//TODO modify find to return chart model array instead of mongo cursor
+			m.On("Find", mock.Anything, bson.M{"repo.name": ""}, mock.Anything).Return(tt.charts, nil)
+
+			// m.On("All", &chartsList).Run(func(args mock.Arguments) {
+			// 	*args.Get(0).(*[]*models.Chart) = tt.charts
+			// })
+			// if tt.query != "" {
+			// 	m.On("One", &cc).Run(func(args mock.Arguments) {
+			// 		*args.Get(0).(*count) = count{len(tt.charts)}
+			// 	})
+			// }
 
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest("GET", "/charts"+tt.query, nil)
@@ -312,6 +316,8 @@ func Test_listRepoCharts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
+			dbClient = NewMockClient(&m)
+			db, _ = dbClient.Database("test")
 
 			m.On("All", &chartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
@@ -377,6 +383,8 @@ func Test_getChart(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
+			dbClient = NewMockClient(&m)
+			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
@@ -440,6 +448,8 @@ func Test_listChartVersions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
+			dbClient = NewMockClient(&m)
+			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
@@ -505,7 +515,8 @@ func Test_getChartVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbSession = mockstore.NewMockSession(&m)
+			dbClient = NewMockClient(&m)
+			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
@@ -524,7 +535,7 @@ func Test_getChartVersion(t *testing.T) {
 				"version":   tt.chart.ChartVersions[0].Version,
 			}
 
-			getChartVersion(w, req, params)
+			GetChartVersion(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
@@ -569,7 +580,8 @@ func Test_getChartIcon(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbSession = mockstore.NewMockSession(&m)
+			dbClient = NewMockClient(&m)
+			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
@@ -587,7 +599,7 @@ func Test_getChartIcon(t *testing.T) {
 				"chartName": parts[1],
 			}
 
-			getChartIcon(w, req, params)
+			GetChartIcon(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code, "http status code should match")
@@ -632,7 +644,8 @@ func Test_getChartVersionReadme(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbSession = mockstore.NewMockSession(&m)
+			dbClient = NewMockClient(&m)
+			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
@@ -651,7 +664,7 @@ func Test_getChartVersionReadme(t *testing.T) {
 				"version":   "0.1.0",
 			}
 
-			getChartVersionReadme(w, req, params)
+			GetChartVersionReadme(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code, "http status code should match")
@@ -696,7 +709,8 @@ func Test_getChartVersionValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbSession = mockstore.NewMockSession(&m)
+			dbClient = NewMockClient(&m)
+			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
@@ -715,7 +729,7 @@ func Test_getChartVersionValues(t *testing.T) {
 				"version":   "0.1.0",
 			}
 
-			getChartVersionValues(w, req, params)
+			GetChartVersionValues(w, req, params)
 
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code, "http status code should match")
@@ -742,7 +756,9 @@ func Test_findLatestChart(t *testing.T) {
 		reqAppVersion := "0.1.0"
 
 		var m mock.Mock
-		dbSession = mockstore.NewMockSession(&m)
+		dbClient = NewMockClient(&m)
+		db, _ = dbClient.Database("test")
+
 		m.On("All", &chartsList).Run(func(args mock.Arguments) {
 			*args.Get(0).(*[]*models.Chart) = charts
 		})
@@ -755,7 +771,7 @@ func Test_findLatestChart(t *testing.T) {
 			"appversion": reqAppVersion,
 		}
 
-		listChartsWithFilters(w, req, params)
+		ListChartsWithFilters(w, req, params)
 
 		var b bodyAPIListResponse
 		json.NewDecoder(w.Body).Decode(&b)
@@ -777,7 +793,9 @@ func Test_findLatestChart(t *testing.T) {
 		reqAppVersion := "0.1.0"
 
 		var m mock.Mock
-		dbSession = mockstore.NewMockSession(&m)
+		dbClient = NewMockClient(&m)
+		db, _ = dbClient.Database("test")
+
 		m.On("All", &chartsList).Run(func(args mock.Arguments) {
 			*args.Get(0).(*[]*models.Chart) = charts
 		})
@@ -790,7 +808,7 @@ func Test_findLatestChart(t *testing.T) {
 			"appversion": reqAppVersion,
 		}
 
-		listChartsWithFilters(w, req, params)
+		ListChartsWithFilters(w, req, params)
 
 		var b bodyAPIListResponse
 		json.NewDecoder(w.Body).Decode(&b)
@@ -807,23 +825,17 @@ func Test_findLatestChart(t *testing.T) {
 }
 
 func initDBClient(t *testing.T) error {
+
 	clientOptions := options.Client().ApplyURI(fdbURL)
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := NewDocLayerClient(ctx, clientOptions)
 	if err != nil {
 		t.Fatalf("Can't create client for FoundationDB document layer: %v", err)
 		return err
 	} else {
-		t.Logf("Connection created Attempting to ping foundation db...")
+		t.Logf("Client created.")
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-	err = client.Ping(ctx, readpref.Primary())
-	if err != nil {
-		t.Logf("Can't connect to FoundationDB document layer: %v", err)
-		return err
-	} else {
-		t.Logf("Successfully connected to FoundationDB document layer.")
-	}
-
 	InitDBConfig(client, fDB)
 	SetPathPrefix("/v1")
 	return nil
