@@ -54,7 +54,7 @@ type Collection interface {
 	FindOne(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOneOptions) error
 	InsertOne(ctxt context.Context, document interface{}, options *options.InsertOneOptions) (*mongo.InsertOneResult, error)
 	UpdateOne(ctxt context.Context, filter interface{}, update interface{}, options *options.UpdateOptions) (*mongo.UpdateResult, error)
-	Find(ctxt context.Context, filter interface{}, options *options.FindOptions) (*mongo.Cursor, error)
+	Find(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOptions) error
 }
 
 // mgoDatabase wraps an mgo.Database and implements Database
@@ -164,30 +164,53 @@ func (c *mongoCollection) UpdateOne(ctxt context.Context, filter interface{}, do
 	return res, err
 }
 
-func (c *mongoCollection) Find(ctxt context.Context, filter interface{}, result *[]interface{}, options *options.FindOptions) (interface{}, error) {
+func (c *mongoCollection) Find(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOptions) error {
 	resCursor, err := c.Collection.Find(ctxt, filter, options)
-	resultType := reflect.ValueOf(result)
-	if resultType.Kind() != reflect.Ptr {
-		return nil, fmt.Errorf("Result arg must be a pointer type. Got: %v", resultType.Kind())
-	}
-	resultSliceType := resultType.Elem()
-	if resultSliceType.Kind() != reflect.Slice {
-		return nil, fmt.Errorf("Result arg must be a slice value. Got: %v", resultSliceType.Kind())
-	}
-	resultElementType := resultSliceType.Type()
-	resultSlice := reflect.MakeSlice(resultElementType, 1, 1)
-
-	for resCursor.Next(context.Background()) {
-		newElement := reflect.New(resultElementType)
-		// Decode the document
-		if err := resCursor.Decode(&newElement); err != nil {
-			log.WithError(err).Errorf(
-				"Error decoding element in find results.",
-			)
-			continue
+	if err != nil {
+		log.WithError(err).Errorf(
+			"Error fetching query result.")
+	} else {
+		resultType := reflect.ValueOf(result)
+		if resultType.Kind() != reflect.Ptr {
+			return fmt.Errorf("Result arg must be a pointer type. Got: %v", resultType.Kind())
 		}
-		reflect.AppendSlice(resultSlice, newElement)
+		resultSliceType := resultType.Elem()
+		if resultSliceType.Kind() != reflect.Slice {
+			return fmt.Errorf("Result arg must be a slice value. Got: %v", resultSliceType.Kind())
+		}
+		err = resCursor.All(context.Background(), result)
+		if err != nil {
+			log.WithError(err).Errorf(
+				"Error decoding query result.")
+		}
 	}
-	reflect.ValueOf(result).Elem().Set(resultSlice)
-	return resultSlice.Interface, err
+	return err
 }
+
+// func (c *mongoCollection) Find(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOptions) error {
+// 	resCursor, err := c.Collection.Find(ctxt, filter, options)
+// 	resultType := reflect.ValueOf(result)
+// 	if resultType.Kind() != reflect.Ptr {
+// 		return fmt.Errorf("Result arg must be a pointer type. Got: %v", resultType.Kind())
+// 	}
+// 	resultSliceType := resultType.Elem()
+// 	if resultSliceType.Kind() != reflect.Slice {
+// 		return fmt.Errorf("Result arg must be a slice value. Got: %v", resultSliceType.Kind())
+// 	}
+// 	resultElementType := resultSliceType.Type()
+// 	resultSlice := reflect.MakeSlice(resultElementType, 1, 1)
+
+// 	for resCursor.Next(context.Background()) {
+// 		newElement := reflect.New(resultElementType)
+// 		// Decode the document
+// 		if err := resCursor.Decode(&newElement); err != nil {
+// 			log.WithError(err).Errorf(
+// 				"Error decoding element in find results.",
+// 			)
+// 			continue
+// 		}
+// 		reflect.AppendSlice(resultSlice, newElement)
+// 	}
+// 	reflect.ValueOf(result).Elem().Set(resultSlice)
+// 	return err
+// }

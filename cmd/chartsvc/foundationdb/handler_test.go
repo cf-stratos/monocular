@@ -253,16 +253,9 @@ func Test_listCharts(t *testing.T) {
 			db, _ = dbClient.Database("test")
 
 			//TODO modify find to return chart model array instead of mongo cursor
-			m.On("Find", mock.Anything, bson.M{"repo.name": ""}, mock.Anything).Return(tt.charts, nil)
-
-			// m.On("All", &chartsList).Run(func(args mock.Arguments) {
-			// 	*args.Get(0).(*[]*models.Chart) = tt.charts
-			// })
-			// if tt.query != "" {
-			// 	m.On("One", &cc).Run(func(args mock.Arguments) {
-			// 		*args.Get(0).(*count) = count{len(tt.charts)}
-			// 	})
-			// }
+			m.On("Find", mock.Anything, bson.M{"repo.name": ""}, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
+				*args.Get(2).(*[]*models.Chart) = tt.charts
+			})
 
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest("GET", "/charts"+tt.query, nil)
@@ -319,14 +312,9 @@ func Test_listRepoCharts(t *testing.T) {
 			dbClient = NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
-			m.On("All", &chartsList).Run(func(args mock.Arguments) {
-				*args.Get(0).(*[]*models.Chart) = tt.charts
+			m.On("Find", mock.Anything, bson.M{"repo.name": "my-repo"}, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
+				*args.Get(2).(*[]*models.Chart) = tt.charts
 			})
-			if tt.query != "" {
-				m.On("One", &cc).Run(func(args mock.Arguments) {
-					*args.Get(0).(*count) = count{len(tt.charts)}
-				})
-			}
 
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest("GET", "/charts/"+tt.repo+tt.query, nil)
@@ -387,10 +375,10 @@ func Test_getChart(t *testing.T) {
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
-				m.On("One", mock.Anything).Return(tt.err)
+				m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tt.err)
 			} else {
-				m.On("One", &models.Chart{}).Return(nil).Run(func(args mock.Arguments) {
-					*args.Get(0).(*models.Chart) = tt.chart
+				m.On("FindOne", mock.Anything, mock.Anything, &models.Chart{}, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+					*args.Get(2).(*models.Chart) = tt.chart
 				})
 			}
 
@@ -452,10 +440,10 @@ func Test_listChartVersions(t *testing.T) {
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
-				m.On("One", mock.Anything).Return(tt.err)
+				m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tt.err)
 			} else {
-				m.On("One", &models.Chart{}).Return(nil).Run(func(args mock.Arguments) {
-					*args.Get(0).(*models.Chart) = tt.chart
+				m.On("FindOne", mock.Anything, mock.Anything, &models.Chart{}, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+					*args.Get(2).(*models.Chart) = tt.chart
 				})
 			}
 
@@ -519,10 +507,10 @@ func Test_getChartVersion(t *testing.T) {
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
-				m.On("One", mock.Anything).Return(tt.err)
+				m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tt.err)
 			} else {
-				m.On("One", &models.Chart{}).Return(nil).Run(func(args mock.Arguments) {
-					*args.Get(0).(*models.Chart) = tt.chart
+				m.On("FindOne", mock.Anything, mock.Anything, &models.Chart{}, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+					*args.Get(2).(*models.Chart) = tt.chart
 				})
 			}
 
@@ -584,10 +572,10 @@ func Test_getChartIcon(t *testing.T) {
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
-				m.On("One", mock.Anything).Return(tt.err)
+				m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tt.err)
 			} else {
-				m.On("One", &models.Chart{}).Return(nil).Run(func(args mock.Arguments) {
-					*args.Get(0).(*models.Chart) = tt.chart
+				m.On("FindOne", mock.Anything, mock.Anything, &models.Chart{}, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+					*args.Get(2).(*models.Chart) = tt.chart
 				})
 			}
 
@@ -648,10 +636,10 @@ func Test_getChartVersionReadme(t *testing.T) {
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
-				m.On("One", mock.Anything).Return(tt.err)
+				m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tt.err)
 			} else {
-				m.On("One", &models.ChartFiles{}).Return(nil).Run(func(args mock.Arguments) {
-					*args.Get(0).(*models.ChartFiles) = tt.files
+				m.On("FindOne", mock.Anything, mock.Anything, &models.ChartFiles{}, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+					*args.Get(2).(*models.ChartFiles) = tt.files
 				})
 			}
 
@@ -713,10 +701,10 @@ func Test_getChartVersionValues(t *testing.T) {
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
-				m.On("One", mock.Anything).Return(tt.err)
+				m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tt.err)
 			} else {
-				m.On("One", &models.ChartFiles{}).Return(nil).Run(func(args mock.Arguments) {
-					*args.Get(0).(*models.ChartFiles) = tt.files
+				m.On("FindOne", mock.Anything, mock.Anything, &models.ChartFiles{}, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+					*args.Get(2).(*models.ChartFiles) = tt.files
 				})
 			}
 
@@ -759,8 +747,8 @@ func Test_findLatestChart(t *testing.T) {
 		dbClient = NewMockClient(&m)
 		db, _ = dbClient.Database("test")
 
-		m.On("All", &chartsList).Run(func(args mock.Arguments) {
-			*args.Get(0).(*[]*models.Chart) = charts
+		m.On("Find", mock.Anything, bson.M{"repo.name": "bar"}, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
+			*args.Get(2).(*[]*models.Chart) = charts
 		})
 
 		w := httptest.NewRecorder()
@@ -796,8 +784,8 @@ func Test_findLatestChart(t *testing.T) {
 		dbClient = NewMockClient(&m)
 		db, _ = dbClient.Database("test")
 
-		m.On("All", &chartsList).Run(func(args mock.Arguments) {
-			*args.Get(0).(*[]*models.Chart) = charts
+		m.On("Find", mock.Anything, bson.M{"repo.name": "bar"}, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
+			*args.Get(2).(*[]*models.Chart) = charts
 		})
 
 		w := httptest.NewRecorder()

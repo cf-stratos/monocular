@@ -142,7 +142,8 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	if repo != "" {
 		filter = bson.M{"repo.name": repo}
 	}
-	resultCursor, err := collection.Find(context.Background(), filter, options.Find())
+	charts := []*models.Chart{}
+	err := collection.Find(context.Background(), filter, charts, options.Find())
 	if err != nil {
 		log.WithError(err).Errorf(
 			"Error fetching charts from DB for pagination %s",
@@ -152,22 +153,9 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	}
 	var tempChartMap map[string]*models.Chart = make(map[string]*models.Chart)
 
-	for resultCursor.Next(context.Background()) {
-		chart := models.Chart{}
-		log.Infof("Decoding chart for pagination. Repo: %v", repo)
-		// Decode the document
-		if err := resultCursor.Decode(&chart); err != nil {
-			log.WithError(err).Errorf(
-				"Error decoding a chart from DB for pagination, from repo %s. Skipping this chart.",
-				repo,
-			)
-			continue
-		}
-		log.Infof("Decoded chart for pagination. Chart: %v.", chart)
-		// Add to a temporary map with the Digest of the latest version
-		// Adding to the map removes duplicates
+	for _, chart := range charts {
 		log.Infof("Chart digest: %v.", chart.ChartVersions[0].Digest)
-		tempChartMap[chart.ChartVersions[0].Digest] = &chart
+		tempChartMap[chart.ChartVersions[0].Digest] = chart
 	}
 
 	log.Infof("Charts in map: %v", len(tempChartMap))
@@ -379,19 +367,10 @@ func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Para
 		"name": 1, "repo": 1,
 		"chartversions": bson.M{"$slice": 1},
 	}
-	resultCursor, err := chartCollection.Find(context.Background(), filter, options.Find().SetProjection(projection))
-	if err == nil {
-		err = resultCursor.All(context.Background(), &charts)
-		if err != nil {
-			log.WithError(err).Errorf(
-				"Error decoding charts from DB with the given name %s, version %s and appversion %s",
-				params["chartName"], req.FormValue("version"), req.FormValue("appversion"),
-			)
-			// continue to return empty list
-		}
-	} else {
+	err := chartCollection.Find(context.Background(), filter, &charts, options.Find().SetProjection(projection))
+	if err != nil {
 		log.WithError(err).Errorf(
-			"could not find charts with the given name %s, version %s and appversion %s",
+			"Error finding charts with the given name %s, version %s and appversion %s",
 			params["chartName"], req.FormValue("version"), req.FormValue("appversion"),
 		)
 		// continue to return empty list
@@ -427,20 +406,11 @@ func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	if params["repo"] != "" {
 		filter["repo.name"] = params["repo"]
 	}
-	resultCursor, err := chartCollection.Find(context.Background(), filter, options.Find())
-	if err == nil {
-		err = resultCursor.All(context.Background(), &charts)
-		if err != nil {
-			log.WithError(err).Errorf(
-				"Error decoding charts from DB with the given query %s",
-				query,
-			)
-			// continue to return empty list
-		}
-	} else {
+	err := chartCollection.Find(context.Background(), filter, &charts, options.Find())
+	if err != nil {
 		log.WithError(err).Errorf(
-			"could not find charts with the given query %s",
-			query,
+			"Error finding charts with the given name %s, version %s and appversion %s",
+			params["chartName"], req.FormValue("version"), req.FormValue("appversion"),
 		)
 		// continue to return empty list
 	}

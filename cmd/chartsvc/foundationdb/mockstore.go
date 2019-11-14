@@ -85,7 +85,7 @@ func (c mockCollection) UpdateOne(ctxt context.Context, filter interface{}, docu
 	return args.Get(0).(*mongo.UpdateResult), args.Error(1)
 }
 
-func (c mockCollection) Find(ctxt context.Context, filter interface{}, options *options.FindOptions) (*mongo.Cursor, error) {
+func (c mockCollection) Find(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOptions) error {
 	args := c.Called(ctxt, filter, options)
-	return args.Get(0).(*mongo.Cursor), args.Error(1)
+	return args.Error(0)
 }
