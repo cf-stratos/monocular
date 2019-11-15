@@ -77,8 +77,8 @@ type count struct {
 	Count int
 }
 
-var dbClient *mongo.Client
-var db *mongo.Database
+var dbClient Client
+var db Database
 var dbCloser func()
 
 //var db mongo.Database
@@ -89,9 +89,9 @@ func SetPathPrefix(prefix string) {
 	pathPrefix = prefix
 }
 
-func InitDBConfig(client *mongo.Client, name string) {
+func InitDBConfig(client Client, name string) {
 	dbClient = client
-	db, dbCloser = GetDatabase(dbClient, name)
+	db, dbCloser = dbClient.Database(name)
 	dbName = name
 }
 
@@ -142,7 +142,8 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	if repo != "" {
 		filter = bson.M{"repo.name": repo}
 	}
-	resultCursor, err := collection.Find(context.Background(), filter, options.Find())
+	var charts []*models.Chart
+	err := collection.Find(context.Background(), filter, &charts, options.Find())
 	if err != nil {
 		log.WithError(err).Errorf(
 			"Error fetching charts from DB for pagination %s",
@@ -152,22 +153,9 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	}
 	var tempChartMap map[string]*models.Chart = make(map[string]*models.Chart)
 
-	for resultCursor.Next(context.Background()) {
-		chart := models.Chart{}
-		log.Infof("Decoding chart for pagination. Repo: %v", repo)
-		// Decode the document
-		if err := resultCursor.Decode(&chart); err != nil {
-			log.WithError(err).Errorf(
-				"Error decoding a chart from DB for pagination, from repo %s. Skipping this chart.",
-				repo,
-			)
-			continue
-		}
-		log.Infof("Decoded chart for pagination. Chart: %v.", chart)
-		// Add to a temporary map with the Digest of the latest version
-		// Adding to the map removes duplicates
+	for _, chart := range charts {
 		log.Infof("Chart digest: %v.", chart.ChartVersions[0].Digest)
-		tempChartMap[chart.ChartVersions[0].Digest] = &chart
+		tempChartMap[chart.ChartVersions[0].Digest] = chart
 	}
 
 	log.Infof("Charts in map: %v", len(tempChartMap))
@@ -203,7 +191,7 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 		paginatedCharts = sortedCharts[(pageNumber-1)*pageSize : pageNumber*pageSize]
 	}
 
-	log.Info("Done.")
+	log.Infof("Returning %v charts, Done.", len(paginatedCharts))
 	return newChartListResponse(paginatedCharts), meta{totalPages}, nil
 }
 
@@ -242,9 +230,9 @@ func GetChart(w http.ResponseWriter, req *http.Request, params Params) {
 
 	chartCollection := db.Collection(chartCollection)
 	filter := bson.M{"_id": chartID}
-	findResult := chartCollection.FindOne(context.Background(), filter, options.FindOne())
-	if findResult.Decode(&chart) == mongo.ErrNoDocuments {
-		log.WithError(findResult.Err()).Errorf("could not find chart with id %s", chartID)
+	findResult := chartCollection.FindOne(context.Background(), filter, &chart, options.FindOne())
+	if findResult == mongo.ErrNoDocuments {
+		log.WithError(findResult).Errorf("could not find chart with id %s", chartID)
 		response.NewErrorResponse(http.StatusNotFound, "could not find chart").Write(w)
 		return
 	}
@@ -260,9 +248,9 @@ func ListChartVersions(w http.ResponseWriter, req *http.Request, params Params) 
 
 	chartCollection := db.Collection(chartCollection)
 	filter := bson.M{"_id": chartID}
-	findResult := chartCollection.FindOne(context.Background(), filter, options.FindOne())
-	if findResult.Decode(&chart) == mongo.ErrNoDocuments {
-		log.WithError(findResult.Err()).Errorf("could not find chart with id %s", chartID)
+	findResult := chartCollection.FindOne(context.Background(), filter, &chart, options.FindOne())
+	if findResult == mongo.ErrNoDocuments {
+		log.WithError(findResult).Errorf("could not find chart with id %s", chartID)
 		response.NewErrorResponse(http.StatusNotFound, "could not find chart").Write(w)
 		return
 	}
@@ -285,9 +273,9 @@ func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 		"name": 1, "repo": 1, "description": 1, "home": 1, "keywords": 1, "maintainers": 1, "sources": 1,
 		"chartversions": 1,
 	}
-	findResult := chartCollection.FindOne(context.Background(), filter, options.FindOne().SetProjection(projection))
-	if findResult.Decode(&chart) == mongo.ErrNoDocuments {
-		log.WithError(findResult.Err()).Errorf("could not find chart with id %s", chartID)
+	findResult := chartCollection.FindOne(context.Background(), filter, &chart, options.FindOne().SetProjection(projection))
+	if findResult == mongo.ErrNoDocuments {
+		log.WithError(findResult).Errorf("could not find chart with id %s", chartID)
 		response.NewErrorResponse(http.StatusNotFound, "could not find chart").Write(w)
 		return
 	}
@@ -310,9 +298,9 @@ func GetChartIcon(w http.ResponseWriter, req *http.Request, params Params) {
 
 	chartCollection := db.Collection(chartCollection)
 	filter := bson.M{"_id": chartID}
-	findResult := chartCollection.FindOne(context.Background(), filter, options.FindOne())
-	if findResult.Decode(&chart) == mongo.ErrNoDocuments {
-		log.WithError(findResult.Err()).Errorf("could not find chart with id %s", chartID)
+	findResult := chartCollection.FindOne(context.Background(), filter, &chart, options.FindOne())
+	if findResult == mongo.ErrNoDocuments {
+		log.WithError(findResult).Errorf("could not find chart with id %s", chartID)
 		http.NotFound(w, req)
 		return
 	}
@@ -332,9 +320,9 @@ func GetChartVersionReadme(w http.ResponseWriter, req *http.Request, params Para
 
 	filesCollection := db.Collection(filesCollection)
 	filter := bson.M{"_id": fileID}
-	findResult := filesCollection.FindOne(context.Background(), filter, options.FindOne())
-	if findResult.Decode(&files) == mongo.ErrNoDocuments {
-		log.WithError(findResult.Err()).Errorf("could not find files with id %s", fileID)
+	findResult := filesCollection.FindOne(context.Background(), filter, &files, options.FindOne())
+	if findResult == mongo.ErrNoDocuments {
+		log.WithError(findResult).Errorf("could not find files with id %s", fileID)
 		http.NotFound(w, req)
 		return
 	}
@@ -354,9 +342,9 @@ func GetChartVersionValues(w http.ResponseWriter, req *http.Request, params Para
 	fileID := fmt.Sprintf("%s/%s-%s", params["repo"], params["chartName"], params["version"])
 	filesCollection := db.Collection(filesCollection)
 	filter := bson.M{"_id": fileID}
-	findResult := filesCollection.FindOne(context.Background(), filter, options.FindOne())
-	if findResult.Decode(&files) == mongo.ErrNoDocuments {
-		log.WithError(findResult.Err()).Errorf("could not find values.yaml with id %s", fileID)
+	findResult := filesCollection.FindOne(context.Background(), filter, &files, options.FindOne())
+	if findResult == mongo.ErrNoDocuments {
+		log.WithError(findResult).Errorf("could not find values.yaml with id %s", fileID)
 		http.NotFound(w, req)
 		return
 	}
@@ -379,19 +367,10 @@ func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Para
 		"name": 1, "repo": 1,
 		"chartversions": bson.M{"$slice": 1},
 	}
-	resultCursor, err := chartCollection.Find(context.Background(), filter, options.Find().SetProjection(projection))
-	if err == nil {
-		err = resultCursor.All(context.Background(), &charts)
-		if err != nil {
-			log.WithError(err).Errorf(
-				"Error decoding charts from DB with the given name %s, version %s and appversion %s",
-				params["chartName"], req.FormValue("version"), req.FormValue("appversion"),
-			)
-			// continue to return empty list
-		}
-	} else {
+	err := chartCollection.Find(context.Background(), filter, &charts, options.Find().SetProjection(projection))
+	if err != nil {
 		log.WithError(err).Errorf(
-			"could not find charts with the given name %s, version %s and appversion %s",
+			"Error finding charts with the given name %s, version %s and appversion %s",
 			params["chartName"], req.FormValue("version"), req.FormValue("appversion"),
 		)
 		// continue to return empty list
@@ -427,20 +406,11 @@ func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	if params["repo"] != "" {
 		filter["repo.name"] = params["repo"]
 	}
-	resultCursor, err := chartCollection.Find(context.Background(), filter, options.Find())
-	if err == nil {
-		err = resultCursor.All(context.Background(), &charts)
-		if err != nil {
-			log.WithError(err).Errorf(
-				"Error decoding charts from DB with the given query %s",
-				query,
-			)
-			// continue to return empty list
-		}
-	} else {
+	err := chartCollection.Find(context.Background(), filter, &charts, options.Find())
+	if err != nil {
 		log.WithError(err).Errorf(
-			"could not find charts with the given query %s",
-			query,
+			"Error finding charts with the given name %s, version %s and appversion %s",
+			params["chartName"], req.FormValue("version"), req.FormValue("appversion"),
 		)
 		// continue to return empty list
 	}
@@ -511,17 +481,4 @@ func newChartVersionListResponse(c *models.Chart) apiListResponse {
 	}
 
 	return cvl
-}
-
-func GetDatabase(client *mongo.Client, dbName string) (*mongo.Database, func()) {
-
-	db := client.Database(dbName)
-	return db, func() {
-		err := client.Disconnect(context.Background())
-
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println("Connection to MongoDB closed.")
-	}
 }

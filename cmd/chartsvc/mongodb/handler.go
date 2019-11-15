@@ -173,7 +173,7 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	if err != nil {
 		return apiListResponse{}, 0, err
 	}
-	log.Info("Done.")
+	log.Infof("Done. Returning %v charts.", len(charts))
 	return newChartListResponse(charts), meta{totalPages}, nil
 }
 

@@ -23,7 +23,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -48,7 +47,9 @@ func Sync(cmd *cobra.Command, args []string) {
 
 	log.Infof("Creating client for FDB: %v, %v, %v", fdbURL, fDB, debug)
 	clientOptions := options.Client().ApplyURI(fdbURL).SetMinPoolSize(10).SetMaxPoolSize(100)
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := NewDocLayerClient(ctx, clientOptions)
 	if err != nil {
 		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
 		return

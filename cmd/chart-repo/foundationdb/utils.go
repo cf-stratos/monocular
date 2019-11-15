@@ -91,15 +91,21 @@ func init() {
 // These steps are processed in this way to ensure relevant chart data is
 // imported into the database as fast as possible. E.g. we want all icons for
 // charts before fetching readmes for each chart and version pair.
-func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authorizationHeader string) error {
+func syncRepo(dbClient Client, dbName, repoName, repoURL string, authorizationHeader string) error {
 
-	db, closer := database(dbClient, dbName)
+	url, err := parseRepoUrl(repoURL)
+	if err != nil {
+		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
+		return err
+	}
+
+	db, closer := dbClient.Database(dbName)
 	defer closer()
 
 	log.Infof("Checking database connection and readiness...")
 	collection := db.Collection("numbers")
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-	res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159})
+	res, err := collection.InsertOne(ctx, bson.M{"name": "pi", "value": 3.14159}, options.InsertOne())
 	if err != nil {
 		log.Fatalf("Database readiness test failed: %v", err)
 		return err
@@ -107,12 +113,6 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 	id := res.InsertedID
 	log.Infof("Database connection test successful.")
 	log.Debugf("Inserted a test document to test collection with ID: %v", id)
-
-	url, err := parseRepoUrl(repoURL)
-	if err != nil {
-		log.WithFields(log.Fields{"url": repoURL}).WithError(err).Error("failed to parse URL")
-		return err
-	}
 
 	r := types.Repo{Name: repoName, URL: url.String(), AuthorizationHeader: authorizationHeader}
 	index, err := fetchRepoIndex(r)
@@ -176,8 +176,8 @@ func syncRepo(dbClient *mongo.Client, dbName, repoName, repoURL string, authoriz
 	return nil
 }
 
-func deleteRepo(dbClient *mongo.Client, dbName, repoName string) error {
-	db, closer := database(dbClient, dbName)
+func deleteRepo(dbClient Client, dbName, repoName string) error {
+	db, closer := dbClient.Database(dbName)
 	defer closer()
 	collection := db.Collection(chartCollection)
 	filter := bson.M{
@@ -272,7 +272,7 @@ func newChart(entry helmrepo.ChartVersions, r types.Repo) types.Chart {
 	return c
 }
 
-func importCharts(db *mongo.Database, dbName string, charts []types.Chart) error {
+func importCharts(db Database, dbName string, charts []types.Chart) error {
 	var operations []mongo.WriteModel
 	var chartIDs []string
 	for _, c := range charts {
@@ -332,7 +332,7 @@ func importCharts(db *mongo.Database, dbName string, charts []types.Chart) error
 	return err
 }
 
-func importWorker(db *mongo.Database, wg *sync.WaitGroup, icons <-chan types.Chart, chartFiles <-chan importChartFilesJob) {
+func importWorker(db Database, wg *sync.WaitGroup, icons <-chan types.Chart, chartFiles <-chan importChartFilesJob) {
 	defer wg.Done()
 	for c := range icons {
 		log.WithFields(log.Fields{"name": c.Name}).Debug("importing icon")
@@ -348,7 +348,7 @@ func importWorker(db *mongo.Database, wg *sync.WaitGroup, icons <-chan types.Cha
 	}
 }
 
-func fetchAndImportIcon(db *mongo.Database, c types.Chart) error {
+func fetchAndImportIcon(db Database, c types.Chart) error {
 	if c.Icon == "" {
 		log.WithFields(log.Fields{"name": c.Name}).Info("icon not found")
 		return nil
@@ -398,14 +398,14 @@ func fetchAndImportIcon(db *mongo.Database, c types.Chart) error {
 	return err
 }
 
-func fetchAndImportFiles(db *mongo.Database, name string, r types.Repo, cv types.ChartVersion) error {
+func fetchAndImportFiles(db Database, name string, r types.Repo, cv types.ChartVersion) error {
 
 	chartFilesID := fmt.Sprintf("%s/%s-%s", r.Name, name, cv.Version)
 	//Check if we already have indexed files for this chart version and digest
 	collection := db.Collection(chartFilesCollection)
 	filter := bson.M{"_id": chartFilesID, "digest": cv.Digest}
-	findResult := collection.FindOne(context.Background(), filter, options.FindOne())
-	if findResult.Decode(&types.ChartFiles{}) != mongo.ErrNoDocuments {
+	findResult := collection.FindOne(context.Background(), filter, &types.ChartFiles{}, options.FindOne())
+	if findResult != mongo.ErrNoDocuments {
 		log.WithFields(log.Fields{"name": name, "version": cv.Version}).Debug("skipping existing files")
 		return nil
 	}

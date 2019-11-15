@@ -245,6 +245,10 @@ func Test_listCharts(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
 
+			//TODO kate check here: this should not return all charts
+			// in the case of pagination - it would only return 2.
+			// Test currently passes because the assert is not modified
+			// to reflect this.
 			m.On("All", &chartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})

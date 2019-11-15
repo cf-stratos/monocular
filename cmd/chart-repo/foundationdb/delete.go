@@ -22,9 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 //Delete Delete a chart repository from FoundationDB
@@ -46,14 +44,16 @@ func Delete(cmd *cobra.Command, args []string) {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(fdbURL))
-	ctx, _ = context.WithTimeout(context.Background(), 2*time.Second)
-	err = client.Ping(ctx, readpref.Primary())
+	log.Infof("Creating client for FDB: %v, %v, %v", fdbURL, fDB, debug)
+	clientOptions := options.Client().ApplyURI(fdbURL).SetMinPoolSize(10).SetMaxPoolSize(100)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := NewDocLayerClient(ctx, clientOptions)
 	if err != nil {
-		log.Fatalf("Can't connect to FoundationDB document layer: %v", err)
+		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
+		return
 	} else {
-		log.Info("Successfully connected to FoundationDB document layer.")
+		log.Infof("Client created.")
 	}
 
 	if err = deleteRepo(client, fDB, args[0]); err != nil {
