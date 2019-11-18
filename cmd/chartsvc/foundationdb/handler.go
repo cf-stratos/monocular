@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2018 The Helm Authors
+Copyright (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strconv"
 
+	"local/monocular/cmd/chartsvc/foundationdb/datastore"
 	"local/monocular/cmd/chartsvc/models"
 
 	"github.com/gorilla/mux"
@@ -77,8 +78,8 @@ type count struct {
 	Count int
 }
 
-var dbClient Client
-var db Database
+var dbClient datastore.Client
+var db datastore.Database
 var dbCloser func()
 
 //var db mongo.Database
@@ -89,7 +90,7 @@ func SetPathPrefix(prefix string) {
 	pathPrefix = prefix
 }
 
-func InitDBConfig(client Client, name string) {
+func InitDBConfig(client datastore.Client, name string) {
 	dbClient = client
 	db, dbCloser = dbClient.Database(name)
 	dbName = name

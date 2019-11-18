@@ -81,7 +81,7 @@ func Test_GetCharts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
-			m.On("All", &chartsList).Run(func(args mock.Arguments) {
+			m.On("All", &mongodb.ChartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})
 
@@ -92,7 +92,7 @@ func Test_GetCharts(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, res.StatusCode, http.StatusOK, "http status code should match")
 
-			var b bodyAPIListResponse
+			var b mongodb.BodyAPIListResponse
 			json.NewDecoder(res.Body).Decode(&b)
 			assert.Len(t, *b.Data, len(tt.charts))
 		})
@@ -123,7 +123,7 @@ func Test_GetChartsInRepo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
-			m.On("All", &chartsList).Run(func(args mock.Arguments) {
+			m.On("All", &mongodb.ChartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})
 
@@ -134,7 +134,7 @@ func Test_GetChartsInRepo(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, res.StatusCode, http.StatusOK, "http status code should match")
 
-			var b bodyAPIListResponse
+			var b mongodb.BodyAPIListResponse
 			json.NewDecoder(res.Body).Decode(&b)
 			assert.Len(t, *b.Data, len(tt.charts))
 		})
@@ -320,7 +320,7 @@ func Test_GetChartIcon(t *testing.T) {
 		{
 			"chart has icon",
 			nil,
-			models.Chart{ID: "my-repo/my-chart", RawIcon: iconBytes()},
+			models.Chart{ID: "my-repo/my-chart", RawIcon: mongodb.IconBytes()},
 			http.StatusOK,
 		},
 		{
@@ -376,7 +376,7 @@ func Test_GetChartReadme(t *testing.T) {
 			"chart exists",
 			"1.2.3",
 			nil,
-			models.ChartFiles{ID: "my-repo/my-chart", Readme: testChartReadme},
+			models.ChartFiles{ID: "my-repo/my-chart", Readme: mongodb.TestChartReadme},
 			http.StatusOK,
 		},
 		{
@@ -433,7 +433,7 @@ func Test_GetChartValues(t *testing.T) {
 			"chart exists",
 			"3.2.1",
 			nil,
-			models.ChartFiles{ID: "my-repo/my-chart", Values: testChartValues},
+			models.ChartFiles{ID: "my-repo/my-chart", Values: mongodb.TestChartValues},
 			http.StatusOK,
 		},
 		{

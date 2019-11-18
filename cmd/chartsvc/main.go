@@ -24,19 +24,21 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/heptiolabs/healthcheck"
-	"github.com/kubeapps/common/datastore"
+	mongoDatastore "github.com/kubeapps/common/datastore"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/negroni"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	fdb "local/monocular/cmd/chartsvc/foundationdb"
+	fdbDatastore "local/monocular/cmd/chartsvc/foundationdb/datastore"
+	"local/monocular/cmd/chartsvc/mongodb"
 )
 
 const pathPrefix = "/v1"
 
 var client *mongo.Client
-var dbSession datastore.Session
+var dbSession mongoDatastore.Session
 
 func setupRoutes() http.Handler {
 	r := mux.NewRouter()
@@ -67,26 +69,23 @@ func setupRoutes() http.Handler {
 
 func main() {
 
-	fdbURL := flag.String("mongo-url", "mongodb://fdb-service/27016", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-	fDB := flag.String("mongo-database", "charts", "MongoDB database")
-	debug := flag.Bool("debug", true, "Debug Logging")
+	//Flag to configure running sync with either MongoDB or FoundationDB
+	dbType := flag.String("db-type", "mongo-db", "Database backend. Defaults to MongoDB if not specified.")
+	debug := flag.Bool("debug", false, "Debug Logging")
+
 	flag.Parse()
 	if *debug {
 		log.SetLevel(log.DebugLevel)
 	}
-	log.Infof("Attempting to connect to FDB: %v, %v, %v", *fdbURL, *fDB, *debug)
 
-	clientOptions := options.Client().ApplyURI(*fdbURL)
-	client, err := fdb.NewDocLayerClient(context.Background(), clientOptions)
-	if err != nil {
-		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
-		return
-	} else {
-		log.Infof("Client created.")
+	switch *dbType {
+	case "mongodb":
+		initMongoDBConnection(debug)
+	case "fdb":
+		initFDBDocLayerConnection(debug)
+	default:
+		log.Fatalf("Unknown database type: %v. db-type, if set, must be either 'mongodb' or 'fdb'.", dbType)
 	}
-
-	fdb.InitDBConfig(client, *fDB)
-	fdb.SetPathPrefix(pathPrefix)
 
 	n := setupRoutes()
 
@@ -97,4 +96,36 @@ func main() {
 	addr := ":" + port
 	log.WithFields(log.Fields{"addr": addr}).Info("Started chartsvc")
 	http.ListenAndServe(addr, n)
+}
+
+func initFDBDocLayerConnection(debug *bool) {
+
+	//Flags for optional FoundationDB + Document Layer backend
+	fdbURL := flag.String("doclayer-url", "mongodb://fdb-service/27016", "FoundationDB Document Layer URL")
+	fDB := flag.String("doclayer-database", "charts", "FoundationDB Document-Layer database")
+
+	log.Debugf("Attempting to connect to FDB: %v, %v, debug: %v", *fdbURL, *fDB, *debug)
+
+	clientOptions := options.Client().ApplyURI(*fdbURL)
+	client, err := fdbDatastore.NewDocLayerClient(context.Background(), clientOptions)
+	if err != nil {
+		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
+		return
+	} else {
+		log.Debugf("FDB Document Layer client created.")
+	}
+
+	fdb.InitDBConfig(client, *fDB)
+	fdb.SetPathPrefix(pathPrefix)
+}
+
+func initMongoDBConnection(debug *bool) {
+
+	//Flags for default mongoDB backend
+	dbURL := flag.String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
+	db := flag.String("mongo-database", "charts", "MongoDB database")
+	user := flag.String("mongo-user", "", "MongoDB user")
+
+	mongodb.InitDBConfig(client, *fDB)
+	mongodb.SetPathPrefix(pathPrefix)
 }

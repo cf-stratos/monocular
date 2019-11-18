@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016-2017 Bitnami
+Copyright (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package datastore implements an interface on top of the mgo mongo client
-package foundationdb
+package datastore
 
 import (
 	"context"
@@ -67,6 +67,7 @@ type mongoClient struct {
 	Client *mongo.Client
 }
 
+// NewDocLayerClient creates a new MongoDB client for the FoundationDB document layer.
 func NewDocLayerClient(ctx context.Context, options *options.ClientOptions) (Client, error) {
 	client, err := mongo.Connect(ctx, options)
 	return &mongoClient{client}, err
@@ -94,50 +95,6 @@ func (d *mongoDatabase) Collection(name string) Collection {
 type mongoCollection struct {
 	Collection *mongo.Collection
 }
-
-// type mongoFindOneOptions struct {
-// 	FindOneOptions *options.FindOneOptions
-// }
-
-// type mongoDeleteOptions struct {
-// 	DeleteOptions *options.DeleteOptions
-// }
-
-// type mongoBulkWriteOptions struct {
-// 	BulkWriteOptions *options.BulkWriteOptions
-// }
-
-// type mongoInsertOneOptions struct {
-// 	InsertOneOptions *options.InsertOneOptions
-// }
-
-// type mongoUpdateOptions struct {
-// 	UpdateOneOptions *options.UpdateOptions
-// }
-
-// type mongoFindOneResult struct {
-// 	FindOneResult *mongo.SingleResult
-// }
-
-// type mongoDeleteResult struct {
-// 	DeleteResult *mongo.DeleteResult
-// }
-
-// type mongoBulkWriteResult struct {
-// 	BulkWriteResult *mongo.BulkWriteResult
-// }
-
-// type mongoInsertOneResult struct {
-// 	InsertOneResult *mongo.InsertOneResult
-// }
-
-// type mongoUpdateResult struct {
-// 	UpdateOneResult *mongo.UpdateResult
-// }
-
-// type mongoWriteModels struct {
-// 	WriteModels *[]mongo.WriteModel
-// }
 
 func (c *mongoCollection) BulkWrite(ctxt context.Context, operations []mongo.WriteModel, options *options.BulkWriteOptions) (*mongo.BulkWriteResult, error) {
 	res, err := c.Collection.BulkWrite(ctxt, operations, options)
@@ -186,31 +143,3 @@ func (c *mongoCollection) Find(ctxt context.Context, filter interface{}, result 
 	}
 	return err
 }
-
-// func (c *mongoCollection) Find(ctxt context.Context, filter interface{}, result interface{}, options *options.FindOptions) error {
-// 	resCursor, err := c.Collection.Find(ctxt, filter, options)
-// 	resultType := reflect.ValueOf(result)
-// 	if resultType.Kind() != reflect.Ptr {
-// 		return fmt.Errorf("Result arg must be a pointer type. Got: %v", resultType.Kind())
-// 	}
-// 	resultSliceType := resultType.Elem()
-// 	if resultSliceType.Kind() != reflect.Slice {
-// 		return fmt.Errorf("Result arg must be a slice value. Got: %v", resultSliceType.Kind())
-// 	}
-// 	resultElementType := resultSliceType.Type()
-// 	resultSlice := reflect.MakeSlice(resultElementType, 1, 1)
-
-// 	for resCursor.Next(context.Background()) {
-// 		newElement := reflect.New(resultElementType)
-// 		// Decode the document
-// 		if err := resCursor.Decode(&newElement); err != nil {
-// 			log.WithError(err).Errorf(
-// 				"Error decoding element in find results.",
-// 			)
-// 			continue
-// 		}
-// 		reflect.AppendSlice(resultSlice, newElement)
-// 	}
-// 	reflect.ValueOf(result).Elem().Set(resultSlice)
-// 	return err
-// }

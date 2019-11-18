@@ -1,4 +1,20 @@
-package foundationdb
+/*
+Copyright (c) 2019
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package datastore
 
 import (
 	"context"
@@ -39,26 +55,6 @@ func (d mockDatabase) Collection(name string) Collection {
 type mockCollection struct {
 	*mock.Mock
 }
-
-/* // mockBulkWriteReult acts as a mock datastore.Collection
-type mockBulkWriteResult struct {
-	*mock.Mock
-}
-
-// mockDeleteManyResult acts as a mock datastore.Collection
-type mockDeleteResult struct {
-	*mock.Mock
-}
-
-// mockFindOneResult acts as a mock datastore.Collection
-type mockFindOneResult struct {
-	*mock.Mock
-}
-
-// mockCollection acts as a mock datastore.Collection
-type mockInsertOneResult struct {
-	*mock.Mock
-} */
 
 func (c mockCollection) BulkWrite(ctxt context.Context, operations []mongo.WriteModel, options *options.BulkWriteOptions) (*mongo.BulkWriteResult, error) {
 	args := c.Called(ctxt, operations, options)

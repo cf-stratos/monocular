@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2018 The Helm Authors
+Copyright (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"local/monocular/cmd/chartsvc/foundationdb/datastore"
 	"local/monocular/cmd/chartsvc/models"
 
 	"github.com/disintegration/imaging"
@@ -38,12 +39,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type bodyAPIListResponse struct {
+type BodyAPIListResponse struct {
 	Data *apiListResponse `json:"data"`
 	Meta meta             `json:"meta,omitempty"`
 }
 
-type bodyAPIResponse struct {
+type BodyAPIResponse struct {
 	Data apiResponse `json:"data"`
 }
 
@@ -251,7 +252,7 @@ func Test_listCharts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbClient = NewMockClient(&m)
+			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
 			m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
@@ -265,7 +266,7 @@ func Test_listCharts(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, http.StatusOK, w.Code)
 
-			var b bodyAPIListResponse
+			var b BodyAPIListResponse
 			json.NewDecoder(w.Body).Decode(&b)
 			if b.Data == nil {
 				t.Fatal("chart list shouldn't be null")
@@ -315,7 +316,7 @@ func Test_listRepoCharts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbClient = NewMockClient(&m)
+			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
 			m.On("Find", mock.Anything, bson.M{"repo.name": "my-repo"}, &chartsList, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
@@ -333,7 +334,7 @@ func Test_listRepoCharts(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, http.StatusOK, w.Code)
 
-			var b bodyAPIListResponse
+			var b BodyAPIListResponse
 			json.NewDecoder(w.Body).Decode(&b)
 			data := *b.Data
 			if tt.query == "" {
@@ -381,7 +382,7 @@ func Test_getChart(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbClient = NewMockClient(&m)
+			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
@@ -405,7 +406,7 @@ func Test_getChart(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
 			if tt.wantCode == http.StatusOK {
-				var b bodyAPIResponse
+				var b BodyAPIResponse
 				json.NewDecoder(w.Body).Decode(&b)
 				assert.Equal(t, b.Data.ID, tt.chart.ID, "chart id in the response should be the same")
 				assert.Equal(t, b.Data.Type, "chart", "response type is chart")
@@ -446,7 +447,7 @@ func Test_listChartVersions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbClient = NewMockClient(&m)
+			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
@@ -470,7 +471,7 @@ func Test_listChartVersions(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
 			if tt.wantCode == http.StatusOK {
-				var b bodyAPIListResponse
+				var b BodyAPIListResponse
 				json.NewDecoder(w.Body).Decode(&b)
 				data := *b.Data
 				for i, resp := range data {
@@ -513,7 +514,7 @@ func Test_getChartVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbClient = NewMockClient(&m)
+			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
@@ -538,7 +539,7 @@ func Test_getChartVersion(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
 			if tt.wantCode == http.StatusOK {
-				var b bodyAPIResponse
+				var b BodyAPIResponse
 				json.NewDecoder(w.Body).Decode(&b)
 				assert.Equal(t, b.Data.ID, tt.chart.ID+"-"+tt.chart.ChartVersions[0].Version, "chart id in the response should be the same")
 				assert.Equal(t, b.Data.Type, "chartVersion", "response type is chartVersion")
@@ -578,7 +579,7 @@ func Test_getChartIcon(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbClient = NewMockClient(&m)
+			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
@@ -642,7 +643,7 @@ func Test_getChartVersionReadme(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbClient = NewMockClient(&m)
+			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
@@ -707,7 +708,7 @@ func Test_getChartVersionValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
-			dbClient = NewMockClient(&m)
+			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
 
 			if tt.err != nil {
@@ -754,7 +755,7 @@ func Test_findLatestChart(t *testing.T) {
 		reqAppVersion := "0.1.0"
 
 		var m mock.Mock
-		dbClient = NewMockClient(&m)
+		dbClient = datastore.NewMockClient(&m)
 		db, _ = dbClient.Database("test")
 
 		m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
@@ -771,7 +772,7 @@ func Test_findLatestChart(t *testing.T) {
 
 		ListChartsWithFilters(w, req, params)
 
-		var b bodyAPIListResponse
+		var b BodyAPIListResponse
 		json.NewDecoder(w.Body).Decode(&b)
 		if b.Data == nil {
 			t.Fatal("chart list shouldn't be null")
@@ -791,7 +792,7 @@ func Test_findLatestChart(t *testing.T) {
 		reqAppVersion := "0.1.0"
 
 		var m mock.Mock
-		dbClient = NewMockClient(&m)
+		dbClient = datastore.NewMockClient(&m)
 		db, _ = dbClient.Database("test")
 
 		m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
@@ -808,7 +809,7 @@ func Test_findLatestChart(t *testing.T) {
 
 		ListChartsWithFilters(w, req, params)
 
-		var b bodyAPIListResponse
+		var b BodyAPIListResponse
 		json.NewDecoder(w.Body).Decode(&b)
 		if b.Data == nil {
 			t.Fatal("chart list shouldn't be null")
@@ -827,7 +828,7 @@ func initDBClient(t *testing.T) error {
 	clientOptions := options.Client().ApplyURI(fdbURL)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	client, err := NewDocLayerClient(ctx, clientOptions)
+	client, err := datastore.NewDocLayerClient(ctx, clientOptions)
 	if err != nil {
 		t.Fatalf("Can't create client for FoundationDB document layer: %v", err)
 		return err
