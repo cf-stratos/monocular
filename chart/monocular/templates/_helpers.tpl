@@ -56,15 +56,18 @@ spec:
     image: {{ template "monocular.image" $global.Values.sync.image }}
     args:
     - sync
-    - --debug={{ default false $global.Values.dbDebug.enabled }}
+    - --debug={{ default false $global.Values.dbDebug }}
     - --user-agent-comment=monocular/{{ $global.Chart.AppVersion }}
     {{- if and $global.Values.global.mongoUrl (and (not $global.Values.mongodb.enabled) (not $global.Values.fdbserver.enabled))}}
     - --mongo-url={{ $global.Values.global.mongoUrl }}
-    {{- else if $global.Values.mongodb.enabled}}
-    - --mongo-url={{ template "mongodb.fullname" $global }}
-    - --mongo-user=root
+    - --db-type=mongodb
     {{- else if $global.Values.fdbserver.enabled}}
     - --doclayer-url=mongodb://{{ template "fullname" $global }}-fdbdoclayer:{{ $global.Values.fdbdoclayer.service.port }}
+    - --db-type=fdb
+    {{- else }}
+    - --mongo-url={{ template "mongodb.fullname" $global }}
+    - --mongo-user=root
+    - --db-type=mongodb
     {{- end }}
     - {{ $repo.name }}
     - {{ $repo.url }}

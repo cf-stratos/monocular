@@ -186,4 +186,5 @@ securityContext: {}
 networkPolicy:
   enabled: false
 
-dbDebug: false
+# Enable debug output in chartsvc and cmd deployments
+debug: false

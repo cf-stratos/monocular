@@ -90,21 +90,34 @@ func setupRoutes(dbType *string) http.Handler {
 func main() {
 
 	//Flag to configure running sync with either MongoDB or FoundationDB
-	dbType := flag.String("db-type", "mongo-db", "Database backend. Defaults to MongoDB if not specified.")
+	dbType := flag.String("db-type", "mongodb", "Database backend. Either \"fdb\" (FoundationDB Document Layer) or \"mongodb\". Defaults to MongoDB if not specified.")
 	debug := flag.Bool("debug", false, "Debug Logging")
 
+	//Flags for optional FoundationDB + Document Layer backend
+	fdbURL := flag.String("doclayer-url", "mongodb://fdb-service/27016", "FoundationDB Document Layer URL")
+	fDB := flag.String("doclayer-database", "charts", "FoundationDB Document-Layer database")
+
+	//Flags for default mongoDB backend
+	dbURL := flag.String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
+	dbName := flag.String("mongo-database", "charts", "MongoDB database")
+	dbUsername := flag.String("mongo-user", "", "MongoDB user")
+	dbPassword := os.Getenv("MONGO_PASSWORD")
+
 	flag.Parse()
+
 	if *debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
+	log.Infof("DB type: %v", *dbType)
+
 	switch *dbType {
 	case "mongodb":
-		initMongoDBConnection(debug)
+		initMongoDBConnection(dbURL, dbName, dbUsername, dbPassword, debug)
 	case "fdb":
-		initFDBDocLayerConnection(debug)
+		initFDBDocLayerConnection(fdbURL, fDB, debug)
 	default:
-		log.Fatalf("Unknown database type: %v. db-type, if set, must be either 'mongodb' or 'fdb'.", dbType)
+		initMongoDBConnection(dbURL, dbName, dbUsername, dbPassword, debug)
 	}
 
 	n := setupRoutes(dbType)
@@ -118,11 +131,7 @@ func main() {
 	http.ListenAndServe(addr, n)
 }
 
-func initFDBDocLayerConnection(debug *bool) {
-
-	//Flags for optional FoundationDB + Document Layer backend
-	fdbURL := flag.String("doclayer-url", "mongodb://fdb-service/27016", "FoundationDB Document Layer URL")
-	fDB := flag.String("doclayer-database", "charts", "FoundationDB Document-Layer database")
+func initFDBDocLayerConnection(fdbURL *string, fDB *string, debug *bool) {
 
 	log.Debugf("Attempting to connect to FDB: %v, %v, debug: %v", *fdbURL, *fDB, *debug)
 
@@ -131,22 +140,14 @@ func initFDBDocLayerConnection(debug *bool) {
 	if err != nil {
 		log.Fatalf("Can't create client for FoundationDB document layer: %v", err)
 		return
-	} else {
-		log.Debugf("FDB Document Layer client created.")
 	}
+	log.Debugf("FDB Document Layer client created.")
 
 	fdb.InitDBConfig(client, *fDB)
 	fdb.SetPathPrefix(pathPrefix)
 }
 
-func initMongoDBConnection(debug *bool) {
-
-	//Flags for default mongoDB backend
-	dbURL := flag.String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-	dbName := flag.String("mongo-database", "charts", "MongoDB database")
-	dbUsername := flag.String("mongo-user", "", "MongoDB user")
-	dbPassword := os.Getenv("MONGO_PASSWORD")
-	flag.Parse()
+func initMongoDBConnection(dbURL *string, dbName *string, dbUsername *string, dbPassword string, debug *bool) {
 
 	mongoConfig := mongoDatastore.Config{URL: *dbURL, Database: *dbName, Username: *dbUsername, Password: dbPassword}
 	var err error
