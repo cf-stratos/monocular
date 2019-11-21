@@ -18,7 +18,6 @@ package foundationdb
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"image/color"
 	"net/http"
@@ -26,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"local/monocular/cmd/chartsvc/foundationdb/datastore"
 	"local/monocular/cmd/chartsvc/models"
@@ -36,7 +34,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type BodyAPIListResponse struct {
@@ -48,7 +45,6 @@ type BodyAPIResponse struct {
 	Data apiResponse `json:"data"`
 }
 
-var chartsList []*models.Chart
 var cc count
 
 const testChartReadme = "# Quickstart\n\n```bash\nhelm install my-repo/my-chart\n```"
@@ -227,25 +223,34 @@ func Test_newChartVersionListResponse(t *testing.T) {
 func Test_listCharts(t *testing.T) {
 	pageSize := 2
 	tests := []struct {
-		name   string
-		query  string
-		charts []*models.Chart
-		meta   meta
+		name            string
+		query           string
+		dbQueryResult   []*models.Chart
+		chartListResult []*models.Chart
+		meta            meta
 	}{
-		{"no charts", "", []*models.Chart{}, meta{1}},
+		{"no charts", "", []*models.Chart{}, []*models.Chart{}, meta{1}},
 		{"one chart", "", []*models.Chart{
-			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
+		}, []*models.Chart{
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 		}, meta{1}},
 		{"two charts", "", []*models.Chart{
-			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
-			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
+			{ID: "stable/dokuwiki", Name: "dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
+		}, []*models.Chart{
+			{ID: "stable/dokuwiki", Name: "dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 		}, meta{1}},
 		// Pagination tests
 		{"four charts with pagination", "?size=" + strconv.Itoa(pageSize), []*models.Chart{
-			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
-			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}}},
-			{ID: "stable/drupal", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "12345"}}},
-			{ID: "stable/wordpress", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "123456"}}},
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
+			{ID: "stable/dokuwiki", Name: "dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}}},
+			{ID: "stable/drupal", Name: "drupal", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "12345"}}},
+			{ID: "stable/wordpress", Name: "wordpress", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "123456"}}},
+		}, []*models.Chart{
+			{ID: "stable/dokuwiki", Name: "dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}}},
+			{ID: "stable/drupal", Name: "drupal", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "12345"}}},
 		}, meta{2}},
 	}
 
@@ -254,9 +259,10 @@ func Test_listCharts(t *testing.T) {
 			var m mock.Mock
 			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
+			var chartsList []*models.Chart
 
 			m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
-				*args.Get(2).(*[]*models.Chart) = tt.charts
+				*args.Get(2).(*[]*models.Chart) = tt.dbQueryResult
 			})
 
 			w := httptest.NewRecorder()
@@ -272,16 +278,14 @@ func Test_listCharts(t *testing.T) {
 				t.Fatal("chart list shouldn't be null")
 			}
 			data := *b.Data
-			if tt.query == "" {
-				assert.Len(t, data, len(tt.charts))
-			} else {
-				assert.Len(t, data, pageSize)
-			}
+
+			assert.Len(t, data, len(tt.chartListResult))
+
 			for i, resp := range data {
-				assert.Equal(t, resp.ID, tt.charts[i].ID, "chart id in the response should be the same")
+				assert.Equal(t, resp.ID, tt.chartListResult[i].ID, "chart id in the response should be the same")
 				assert.Equal(t, resp.Type, "chart", "response type is chart")
-				assert.Equal(t, resp.Links.(map[string]interface{})["self"], pathPrefix+"/charts/"+tt.charts[i].ID, "self link should be the same")
-				assert.Equal(t, resp.Relationships["latestChartVersion"].Data.(map[string]interface{})["version"], tt.charts[i].ChartVersions[0].Version, "latestChartVersion should match version at index 0")
+				assert.Equal(t, resp.Links.(map[string]interface{})["self"], pathPrefix+"/charts/"+tt.chartListResult[i].ID, "self link should be the same")
+				assert.Equal(t, resp.Relationships["latestChartVersion"].Data.(map[string]interface{})["version"], tt.chartListResult[i].ChartVersions[0].Version, "latestChartVersion should match version at index 0")
 			}
 			assert.Equal(t, b.Meta, tt.meta, "response meta should be the same")
 		})
@@ -291,25 +295,33 @@ func Test_listCharts(t *testing.T) {
 func Test_listRepoCharts(t *testing.T) {
 	pageSize := 2
 	tests := []struct {
-		name   string
-		repo   string
-		query  string
-		charts []*models.Chart
-		meta   meta
+		name            string
+		repo            string
+		query           string
+		dbQueryResult   []*models.Chart
+		chartListResult []*models.Chart
+		meta            meta
 	}{
-		{"repo has no charts", "my-repo", "", []*models.Chart{}, meta{1}},
+		{"repo has no charts", "my-repo", "", []*models.Chart{}, []*models.Chart{}, meta{1}},
 		{"repo has one chart", "my-repo", "", []*models.Chart{
-			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
+		}, []*models.Chart{
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 		}, meta{1}},
 		{"repo has many charts", "my-repo", "", []*models.Chart{
-			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
-			{ID: "my-repo/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
+			{ID: "my-repo/dokuwiki", Name: "dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
+		}, []*models.Chart{
+			{ID: "my-repo/dokuwiki", Name: "dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
+			{ID: "my-repo/my-chart", Name: "my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 		}, meta{1}},
 		{"repo has many charts with pagination", "my-repo", "?size=" + strconv.Itoa(pageSize), []*models.Chart{
-			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
-			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}}},
-			{ID: "stable/drupal", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "12345"}}},
-			{ID: "stable/wordpress", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "123456"}}},
+			{ID: "my-repo/my-chart3", Name: "my-chart3", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
+			{ID: "my-repo/my-chart1", Name: "my-chart1", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "1234"}}},
+			{ID: "my-repo/my-chart2", Name: "my-chart2", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "12345"}}},
+		}, []*models.Chart{
+			{ID: "my-repo/my-chart1", Name: "my-chart1", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "1234"}}},
+			{ID: "my-repo/my-chart2", Name: "my-chart2", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "12345"}}},
 		}, meta{2}},
 	}
 
@@ -318,9 +330,9 @@ func Test_listRepoCharts(t *testing.T) {
 			var m mock.Mock
 			dbClient = datastore.NewMockClient(&m)
 			db, _ = dbClient.Database("test")
-
+			var chartsList []*models.Chart
 			m.On("Find", mock.Anything, bson.M{"repo.name": "my-repo"}, &chartsList, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
-				*args.Get(2).(*[]*models.Chart) = tt.charts
+				*args.Get(2).(*[]*models.Chart) = tt.dbQueryResult
 			})
 
 			w := httptest.NewRecorder()
@@ -337,15 +349,11 @@ func Test_listRepoCharts(t *testing.T) {
 			var b BodyAPIListResponse
 			json.NewDecoder(w.Body).Decode(&b)
 			data := *b.Data
-			if tt.query == "" {
-				assert.Len(t, data, len(tt.charts))
-			} else {
-				assert.Len(t, data, pageSize)
-			}
+			assert.Len(t, data, len(tt.chartListResult))
 			for i, resp := range data {
-				assert.Equal(t, resp.ID, tt.charts[i].ID, "chart id in the response should be the same")
+				assert.Equal(t, resp.ID, tt.chartListResult[i].ID, "chart id in the response should be the same")
 				assert.Equal(t, resp.Type, "chart", "response type is chart")
-				assert.Equal(t, resp.Relationships["latestChartVersion"].Data.(map[string]interface{})["version"], tt.charts[i].ChartVersions[0].Version, "latestChartVersion should match version at index 0")
+				assert.Equal(t, resp.Relationships["latestChartVersion"].Data.(map[string]interface{})["version"], tt.chartListResult[i].ChartVersions[0].Version, "latestChartVersion should match version at index 0")
 			}
 			assert.Equal(t, b.Meta, tt.meta, "response meta should be the same")
 		})
@@ -757,7 +765,7 @@ func Test_findLatestChart(t *testing.T) {
 		var m mock.Mock
 		dbClient = datastore.NewMockClient(&m)
 		db, _ = dbClient.Database("test")
-
+		var chartsList []*models.Chart
 		m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
 			*args.Get(2).(*[]*models.Chart) = charts
 		}).Return(nil)
@@ -794,7 +802,7 @@ func Test_findLatestChart(t *testing.T) {
 		var m mock.Mock
 		dbClient = datastore.NewMockClient(&m)
 		db, _ = dbClient.Database("test")
-
+		var chartsList []*models.Chart
 		m.On("Find", mock.Anything, mock.Anything, &chartsList, mock.Anything).Run(func(args mock.Arguments) {
 			*args.Get(2).(*[]*models.Chart) = charts
 		}).Return(nil)
@@ -821,21 +829,4 @@ func Test_findLatestChart(t *testing.T) {
 			t.Errorf("Expecting %v, received %v", charts[0], data[0].ID)
 		}
 	})
-}
-
-func initDBClient(t *testing.T) error {
-
-	clientOptions := options.Client().ApplyURI(fdbURL)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	client, err := datastore.NewDocLayerClient(ctx, clientOptions)
-	if err != nil {
-		t.Fatalf("Can't create client for FoundationDB document layer: %v", err)
-		return err
-	} else {
-		t.Logf("Client created.")
-	}
-	InitDBConfig(client, fDB)
-	SetPathPrefix("/v1")
-	return nil
 }

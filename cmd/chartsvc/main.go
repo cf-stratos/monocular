@@ -24,6 +24,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/kubeapps/common/datastore"
 	mongoDatastore "github.com/kubeapps/common/datastore"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/negroni"
@@ -40,7 +41,7 @@ const pathPrefix = "/v1"
 var client *mongo.Client
 var dbSession mongoDatastore.Session
 
-func setupRoutes() http.Handler {
+func setupRoutes(dbType *string) http.Handler {
 	r := mux.NewRouter()
 
 	// Healthcheck
@@ -48,19 +49,38 @@ func setupRoutes() http.Handler {
 	r.Handle("/live", health)
 	r.Handle("/ready", health)
 
-	// Routes
-	apiv1 := r.PathPrefix(pathPrefix).Subrouter()
-	apiv1.Methods("GET").Path("/charts").Queries("name", "{chartName}", "version", "{version}", "appversion", "{appversion}").Handler(fdb.WithParams(fdb.ListChartsWithFilters))
-	apiv1.Methods("GET").Path("/charts").HandlerFunc(fdb.ListCharts)
-	apiv1.Methods("GET").Path("/charts/search").Queries("q", "{query}").Handler(fdb.WithParams(fdb.SearchCharts))
-	apiv1.Methods("GET").Path("/charts/{repo}").Handler(fdb.WithParams(fdb.ListRepoCharts))
-	apiv1.Methods("GET").Path("/charts/{repo}/search").Queries("q", "{query}").Handler(fdb.WithParams(fdb.SearchCharts))
-	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}").Handler(fdb.WithParams(fdb.GetChart))
-	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions").Handler(fdb.WithParams(fdb.ListChartVersions))
-	apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions/{version}").Handler(fdb.WithParams(fdb.GetChartVersion))
-	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/logo-160x160-fit.png").Handler(fdb.WithParams(fdb.GetChartIcon))
-	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/README.md").Handler(fdb.WithParams(fdb.GetChartVersionReadme))
-	apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/values.yaml").Handler(fdb.WithParams(fdb.GetChartVersionValues))
+	switch *dbType {
+	case "mongodb":
+		// Routes
+		apiv1 := r.PathPrefix(pathPrefix).Subrouter()
+		apiv1.Methods("GET").Path("/charts").Queries("name", "{chartName}", "version", "{version}", "appversion", "{appversion}").Handler(mongodb.WithParams(mongodb.ListChartsWithFilters))
+		apiv1.Methods("GET").Path("/charts").HandlerFunc(mongodb.ListCharts)
+		apiv1.Methods("GET").Path("/charts/search").Queries("q", "{query}").Handler(mongodb.WithParams(mongodb.SearchCharts))
+		apiv1.Methods("GET").Path("/charts/{repo}").Handler(mongodb.WithParams(mongodb.ListRepoCharts))
+		apiv1.Methods("GET").Path("/charts/{repo}/search").Queries("q", "{query}").Handler(mongodb.WithParams(mongodb.SearchCharts))
+		apiv1.Methods("GET").Path("/charts/{repo}/{chartName}").Handler(mongodb.WithParams(mongodb.GetChart))
+		apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions").Handler(mongodb.WithParams(mongodb.ListChartVersions))
+		apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions/{version}").Handler(mongodb.WithParams(mongodb.GetChartVersion))
+		apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/logo-160x160-fit.png").Handler(mongodb.WithParams(mongodb.GetChartIcon))
+		apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/README.md").Handler(mongodb.WithParams(mongodb.GetChartVersionReadme))
+		apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/values.yaml").Handler(mongodb.WithParams(mongodb.GetChartVersionValues))
+	case "fdb":
+		// Routes
+		apiv1 := r.PathPrefix(pathPrefix).Subrouter()
+		apiv1.Methods("GET").Path("/charts").Queries("name", "{chartName}", "version", "{version}", "appversion", "{appversion}").Handler(fdb.WithParams(fdb.ListChartsWithFilters))
+		apiv1.Methods("GET").Path("/charts").HandlerFunc(fdb.ListCharts)
+		apiv1.Methods("GET").Path("/charts/search").Queries("q", "{query}").Handler(fdb.WithParams(fdb.SearchCharts))
+		apiv1.Methods("GET").Path("/charts/{repo}").Handler(fdb.WithParams(fdb.ListRepoCharts))
+		apiv1.Methods("GET").Path("/charts/{repo}/search").Queries("q", "{query}").Handler(fdb.WithParams(fdb.SearchCharts))
+		apiv1.Methods("GET").Path("/charts/{repo}/{chartName}").Handler(fdb.WithParams(fdb.GetChart))
+		apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions").Handler(fdb.WithParams(fdb.ListChartVersions))
+		apiv1.Methods("GET").Path("/charts/{repo}/{chartName}/versions/{version}").Handler(fdb.WithParams(fdb.GetChartVersion))
+		apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/logo-160x160-fit.png").Handler(fdb.WithParams(fdb.GetChartIcon))
+		apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/README.md").Handler(fdb.WithParams(fdb.GetChartVersionReadme))
+		apiv1.Methods("GET").Path("/assets/{repo}/{chartName}/versions/{version}/values.yaml").Handler(fdb.WithParams(fdb.GetChartVersionValues))
+	default:
+		log.Fatalf("Unknown database type: %v. db-type, if set, must be either 'mongodb' or 'fdb'.", dbType)
+	}
 
 	n := negroni.Classic()
 	n.UseHandler(r)
@@ -87,7 +107,7 @@ func main() {
 		log.Fatalf("Unknown database type: %v. db-type, if set, must be either 'mongodb' or 'fdb'.", dbType)
 	}
 
-	n := setupRoutes()
+	n := setupRoutes(dbType)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -123,9 +143,18 @@ func initMongoDBConnection(debug *bool) {
 
 	//Flags for default mongoDB backend
 	dbURL := flag.String("mongo-url", "localhost", "MongoDB URL (see https://godoc.org/github.com/globalsign/mgo#Dial for format)")
-	db := flag.String("mongo-database", "charts", "MongoDB database")
-	user := flag.String("mongo-user", "", "MongoDB user")
+	dbName := flag.String("mongo-database", "charts", "MongoDB database")
+	dbUsername := flag.String("mongo-user", "", "MongoDB user")
+	dbPassword := os.Getenv("MONGO_PASSWORD")
+	flag.Parse()
 
-	mongodb.InitDBConfig(client, *fDB)
+	mongoConfig := mongoDatastore.Config{URL: *dbURL, Database: *dbName, Username: *dbUsername, Password: dbPassword}
+	var err error
+	dbSession, err := datastore.NewSession(mongoConfig)
+	if err != nil {
+		log.WithFields(log.Fields{"host": *dbURL}).Fatal(err)
+	}
+
+	mongodb.InitDBConfig(dbSession, *dbName)
 	mongodb.SetPathPrefix(pathPrefix)
 }

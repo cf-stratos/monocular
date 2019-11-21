@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"local/monocular/cmd/chartsvc/models"
+	"local/monocular/cmd/chartsvc/utils"
 
 	"github.com/globalsign/mgo/bson"
 	"github.com/gorilla/mux"
@@ -44,30 +45,6 @@ func (h WithParams) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 const chartCollection = "charts"
 const filesCollection = "files"
-
-type apiResponse struct {
-	ID            string      `json:"id"`
-	Type          string      `json:"type"`
-	Attributes    interface{} `json:"attributes"`
-	Links         interface{} `json:"links"`
-	Relationships relMap      `json:"relationships"`
-}
-
-type apiListResponse []*apiResponse
-
-type selfLink struct {
-	Self string `json:"self"`
-}
-
-type relMap map[string]rel
-type rel struct {
-	Data  interface{} `json:"data"`
-	Links selfLink    `json:"links"`
-}
-
-type meta struct {
-	TotalPages int `json:"totalPages"`
-}
 
 // count is used to parse the result of a $count operation in the database
 type count struct {
@@ -123,7 +100,7 @@ func uniqChartList(charts []*models.Chart) []*models.Chart {
 	return res
 }
 
-func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListResponse, interface{}, error) {
+func getPaginatedChartList(repo string, pageNumber, pageSize int) (utils.ApiListResponse, interface{}, error) {
 	log.Info("Request for charts..")
 	db, closer := dbSession.DB()
 	defer closer()
@@ -155,7 +132,7 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 		cc := count{}
 		err := c.Pipe(countPipeline).One(&cc)
 		if err != nil {
-			return apiListResponse{}, 0, err
+			return utils.ApiListResponse{}, 0, err
 		}
 		totalPages = int(math.Ceil(float64(cc.Count) / float64(pageSize)))
 
@@ -171,10 +148,10 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	}
 	err := c.Pipe(pipeline).All(&charts)
 	if err != nil {
-		return apiListResponse{}, 0, err
+		return utils.ApiListResponse{}, 0, err
 	}
 	log.Infof("Done. Returning %v charts.", len(charts))
-	return newChartListResponse(charts), meta{totalPages}, nil
+	return newChartListResponse(charts), utils.Meta{totalPages}, nil
 }
 
 // listCharts returns a list of charts
@@ -315,7 +292,7 @@ func GetChartVersionValues(w http.ResponseWriter, req *http.Request, params Para
 }
 
 // listChartsWithFilters returns the list of repos that contains the given chart and the latest version found
-func listChartsWithFilters(w http.ResponseWriter, req *http.Request, params Params) {
+func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Params) {
 	db, closer := dbSession.DB()
 	defer closer()
 
@@ -377,24 +354,24 @@ func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	response.NewDataResponse(cl).Write(w)
 }
 
-func newChartResponse(c *models.Chart) *apiResponse {
+func newChartResponse(c *models.Chart) *utils.ApiResponse {
 	latestCV := c.ChartVersions[0]
-	return &apiResponse{
+	return &utils.ApiResponse{
 		Type:       "chart",
 		ID:         c.ID,
 		Attributes: chartAttributes(*c),
-		Links:      selfLink{pathPrefix + "/charts/" + c.ID},
-		Relationships: relMap{
-			"latestChartVersion": rel{
+		Links:      utils.SelfLink{pathPrefix + "/charts/" + c.ID},
+		Relationships: utils.RelMap{
+			"latestChartVersion": utils.Rel{
 				Data:  chartVersionAttributes(c.ID, latestCV),
-				Links: selfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + latestCV.Version},
+				Links: utils.SelfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + latestCV.Version},
 			},
 		},
 	}
 }
 
-func newChartListResponse(charts []*models.Chart) apiListResponse {
-	cl := apiListResponse{}
+func newChartListResponse(charts []*models.Chart) utils.ApiListResponse {
+	cl := utils.ApiListResponse{}
 	for _, c := range charts {
 		cl = append(cl, newChartResponse(c))
 	}
@@ -417,23 +394,23 @@ func chartAttributes(c models.Chart) models.Chart {
 	return c
 }
 
-func newChartVersionResponse(c *models.Chart, cv models.ChartVersion) *apiResponse {
-	return &apiResponse{
+func newChartVersionResponse(c *models.Chart, cv models.ChartVersion) *utils.ApiResponse {
+	return &utils.ApiResponse{
 		Type:       "chartVersion",
 		ID:         fmt.Sprintf("%s-%s", c.ID, cv.Version),
 		Attributes: chartVersionAttributes(c.ID, cv),
-		Links:      selfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + cv.Version},
-		Relationships: relMap{
-			"chart": rel{
+		Links:      utils.SelfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + cv.Version},
+		Relationships: utils.RelMap{
+			"chart": utils.Rel{
 				Data:  chartAttributes(*c),
-				Links: selfLink{pathPrefix + "/charts/" + c.ID},
+				Links: utils.SelfLink{pathPrefix + "/charts/" + c.ID},
 			},
 		},
 	}
 }
 
-func newChartVersionListResponse(c *models.Chart) apiListResponse {
-	var cvl apiListResponse
+func newChartVersionListResponse(c *models.Chart) utils.ApiListResponse {
+	var cvl utils.ApiListResponse
 	for _, cv := range c.ChartVersions {
 		cvl = append(cvl, newChartVersionResponse(c, cv))
 	}

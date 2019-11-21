@@ -27,7 +27,7 @@ import (
 	"testing"
 
 	"local/monocular/cmd/chartsvc/models"
-	"local/monocular/cmd/chartsvc/mongodb"
+	"local/monocular/cmd/chartsvc/utils"
 
 	"github.com/disintegration/imaging"
 	"github.com/kubeapps/common/datastore/mockstore"
@@ -35,22 +35,13 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type BodyAPIListResponse struct {
-	Data *apiListResponse `json:"data"`
-	Meta meta             `json:"meta,omitempty"`
-}
-
-type BodyAPIResponse struct {
-	Data apiResponse `json:"data"`
-}
-
-var ChartsList []*models.Chart
+var chartsList []*models.Chart
 var cc count
 
-const TestChartReadme = "# Quickstart\n\n```bash\nhelm install my-repo/my-chart\n```"
-const TestChartValues = "image:\n  registry: docker.io\n  repository: my-repo/my-chart\n  tag: 0.1.0"
+const testChartReadme = "# Quickstart\n\n```bash\nhelm install my-repo/my-chart\n```"
+const testChartValues = "image:\n  registry: docker.io\n  repository: my-repo/my-chart\n  tag: 0.1.0"
 
-func IconBytes() []byte {
+func iconBytes() []byte {
 	var b bytes.Buffer
 	img := imaging.New(1, 1, color.White)
 	imaging.Encode(&b, img, imaging.PNG)
@@ -66,7 +57,7 @@ func Test_chartAttributes(t *testing.T) {
 			ID: "stable/wordpress",
 		}},
 		{"chart has a icon", models.Chart{
-			ID: "repo/mychart", RawIcon: mongodb.IconBytes(),
+			ID: "repo/mychart", RawIcon: iconBytes(),
 		}},
 	}
 
@@ -121,7 +112,7 @@ func Test_newChartResponse(t *testing.T) {
 			assert.Equal(t, cResponse.Type, "chart", "response type is chart")
 			assert.Equal(t, cResponse.ID, tt.chart.ID, "chart ID should be the same")
 			assert.Equal(t, cResponse.Relationships["latestChartVersion"].Data.(models.ChartVersion).Version, tt.chart.ChartVersions[0].Version, "latestChartVersion should match version at index 0")
-			assert.Equal(t, cResponse.Links.(selfLink).Self, pathPrefix+"/charts/"+tt.chart.ID, "self link should be the same")
+			assert.Equal(t, cResponse.Links.(utils.SelfLink).Self, pathPrefix+"/charts/"+tt.chart.ID, "self link should be the same")
 			assert.Equal(t, len(cResponse.Attributes.(models.Chart).ChartVersions), len(tt.chart.ChartVersions), "number of chart versions in the response should be the same")
 		})
 	}
@@ -156,7 +147,7 @@ func Test_newChartListResponse(t *testing.T) {
 				assert.Equal(t, clResponse[i].Type, "chart", "response type is chart")
 				assert.Equal(t, clResponse[i].ID, tt.result[i].ID, "chart ID should be the same")
 				assert.Equal(t, clResponse[i].Relationships["latestChartVersion"].Data.(models.ChartVersion).Version, tt.result[i].ChartVersions[0].Version, "latestChartVersion should match version at index 0")
-				assert.Equal(t, clResponse[i].Links.(selfLink).Self, pathPrefix+"/charts/"+tt.result[i].ID, "self link should be the same")
+				assert.Equal(t, clResponse[i].Links.(utils.SelfLink).Self, pathPrefix+"/charts/"+tt.result[i].ID, "self link should be the same")
 				assert.Equal(t, len(clResponse[i].Attributes.(models.Chart).ChartVersions), len(tt.result[i].ChartVersions), "number of chart versions in the response should be the same")
 			}
 		})
@@ -179,7 +170,7 @@ func Test_newChartVersionResponse(t *testing.T) {
 				cvResponse := newChartVersionResponse(&tt.chart, tt.chart.ChartVersions[i])
 				assert.Equal(t, cvResponse.Type, "chartVersion", "response type is chartVersion")
 				assert.Equal(t, cvResponse.ID, tt.chart.ID+"-"+tt.chart.ChartVersions[i].Version, "reponse id should have chart version suffix")
-				assert.Equal(t, cvResponse.Links.(interface{}).(selfLink).Self, pathPrefix+"/charts/"+tt.chart.ID+"/versions/"+tt.chart.ChartVersions[i].Version, "self link should be the same")
+				assert.Equal(t, cvResponse.Links.(interface{}).(utils.SelfLink).Self, pathPrefix+"/charts/"+tt.chart.ID+"/versions/"+tt.chart.ChartVersions[i].Version, "self link should be the same")
 				assert.Equal(t, cvResponse.Attributes.(models.ChartVersion).Version, tt.chart.ChartVersions[i].Version, "chart version in the response should be the same")
 				assert.Equal(t, cvResponse.Relationships["chart"].Data.(interface{}).(models.Chart), tt.chart, "chart in relatioship matches")
 			}
@@ -210,7 +201,7 @@ func Test_newChartVersionListResponse(t *testing.T) {
 			for i := range tt.chart.ChartVersions {
 				assert.Equal(t, cvListResponse[i].Type, "chartVersion", "response type is chartVersion")
 				assert.Equal(t, cvListResponse[i].ID, tt.chart.ID+"-"+tt.chart.ChartVersions[i].Version, "reponse id should have chart version suffix")
-				assert.Equal(t, cvListResponse[i].Links.(interface{}).(selfLink).Self, pathPrefix+"/charts/"+tt.chart.ID+"/versions/"+tt.chart.ChartVersions[i].Version, "self link should be the same")
+				assert.Equal(t, cvListResponse[i].Links.(interface{}).(utils.SelfLink).Self, pathPrefix+"/charts/"+tt.chart.ID+"/versions/"+tt.chart.ChartVersions[i].Version, "self link should be the same")
 				assert.Equal(t, cvListResponse[i].Attributes.(models.ChartVersion).Version, tt.chart.ChartVersions[i].Version, "chart version in the response should be the same")
 			}
 		})
@@ -222,23 +213,23 @@ func Test_listCharts(t *testing.T) {
 		name   string
 		query  string
 		charts []*models.Chart
-		meta   meta
+		meta   utils.Meta
 	}{
-		{"no charts", "", []*models.Chart{}, meta{1}},
+		{"no charts", "", []*models.Chart{}, utils.Meta{1}},
 		{"one chart", "", []*models.Chart{
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
-		}, meta{1}},
+		}, utils.Meta{1}},
 		{"two charts", "", []*models.Chart{
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
-		}, meta{1}},
+		}, utils.Meta{1}},
 		// Pagination tests
 		{"four charts with pagination", "?size=2", []*models.Chart{
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}}},
 			{ID: "stable/drupal", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "12345"}}},
 			{ID: "stable/wordpress", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "123456"}}},
-		}, meta{2}},
+		}, utils.Meta{2}},
 	}
 
 	for _, tt := range tests {
@@ -250,7 +241,7 @@ func Test_listCharts(t *testing.T) {
 			// in the case of pagination - it would only return 2.
 			// Test currently passes because the assert is not modified
 			// to reflect this.
-			m.On("All", &ChartsList).Run(func(args mock.Arguments) {
+			m.On("All", &chartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})
 			if tt.query != "" {
@@ -266,7 +257,7 @@ func Test_listCharts(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, http.StatusOK, w.Code)
 
-			var b BodyAPIListResponse
+			var b utils.BodyAPIListResponse
 			json.NewDecoder(w.Body).Decode(&b)
 			if b.Data == nil {
 				t.Fatal("chart list shouldn't be null")
@@ -290,22 +281,22 @@ func Test_listRepoCharts(t *testing.T) {
 		repo   string
 		query  string
 		charts []*models.Chart
-		meta   meta
+		meta   utils.Meta
 	}{
-		{"repo has no charts", "my-repo", "", []*models.Chart{}, meta{1}},
+		{"repo has no charts", "my-repo", "", []*models.Chart{}, utils.Meta{1}},
 		{"repo has one chart", "my-repo", "", []*models.Chart{
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
-		}, meta{1}},
+		}, utils.Meta{1}},
 		{"repo has many charts", "my-repo", "", []*models.Chart{
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 			{ID: "my-repo/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}, {Version: "1.2.2", Digest: "12345"}}},
-		}, meta{1}},
+		}, utils.Meta{1}},
 		{"repo has many charts with pagination", "my-repo", "?size=2", []*models.Chart{
 			{ID: "my-repo/my-chart", ChartVersions: []models.ChartVersion{{Version: "0.0.1", Digest: "123"}}},
 			{ID: "stable/dokuwiki", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "1234"}}},
 			{ID: "stable/drupal", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "12345"}}},
 			{ID: "stable/wordpress", ChartVersions: []models.ChartVersion{{Version: "1.2.3", Digest: "123456"}}},
-		}, meta{2}},
+		}, utils.Meta{2}},
 	}
 
 	for _, tt := range tests {
@@ -313,7 +304,7 @@ func Test_listRepoCharts(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
 
-			m.On("All", &ChartsList).Run(func(args mock.Arguments) {
+			m.On("All", &chartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})
 			if tt.query != "" {
@@ -333,7 +324,7 @@ func Test_listRepoCharts(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, http.StatusOK, w.Code)
 
-			var b BodyAPIListResponse
+			var b utils.BodyAPIListResponse
 			json.NewDecoder(w.Body).Decode(&b)
 			data := *b.Data
 			assert.Len(t, data, len(tt.charts))
@@ -400,7 +391,7 @@ func Test_getChart(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
 			if tt.wantCode == http.StatusOK {
-				var b BodyAPIResponse
+				var b utils.BodyAPIResponse
 				json.NewDecoder(w.Body).Decode(&b)
 				assert.Equal(t, b.Data.ID, tt.chart.ID, "chart id in the response should be the same")
 				assert.Equal(t, b.Data.Type, "chart", "response type is chart")
@@ -464,7 +455,7 @@ func Test_listChartVersions(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
 			if tt.wantCode == http.StatusOK {
-				var b BodyAPIListResponse
+				var b utils.BodyAPIListResponse
 				json.NewDecoder(w.Body).Decode(&b)
 				data := *b.Data
 				for i, resp := range data {
@@ -531,7 +522,7 @@ func Test_getChartVersion(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, tt.wantCode, w.Code)
 			if tt.wantCode == http.StatusOK {
-				var b BodyAPIResponse
+				var b utils.BodyAPIResponse
 				json.NewDecoder(w.Body).Decode(&b)
 				assert.Equal(t, b.Data.ID, tt.chart.ID+"-"+tt.chart.ChartVersions[0].Version, "chart id in the response should be the same")
 				assert.Equal(t, b.Data.Type, "chartVersion", "response type is chartVersion")
@@ -557,7 +548,7 @@ func Test_getChartIcon(t *testing.T) {
 		{
 			"chart has icon",
 			nil,
-			models.Chart{ID: "my-repo/my-chart", RawIcon: mongodb.IconBytes()},
+			models.Chart{ID: "my-repo/my-chart", RawIcon: utils.IconBytes()},
 			http.StatusOK,
 		},
 		{
@@ -619,7 +610,7 @@ func Test_getChartVersionReadme(t *testing.T) {
 			"chart exists",
 			"1.2.3",
 			nil,
-			models.ChartFiles{ID: "my-repo/my-chart", Readme: TestChartReadme},
+			models.ChartFiles{ID: "my-repo/my-chart", Readme: utils.TestChartReadme},
 			http.StatusOK,
 		},
 		{
@@ -683,7 +674,7 @@ func Test_getChartVersionValues(t *testing.T) {
 			"chart exists",
 			"3.2.1",
 			nil,
-			models.ChartFiles{ID: "my-repo/my-chart", Values: TestChartValues},
+			models.ChartFiles{ID: "my-repo/my-chart", Values: utils.TestChartValues},
 			http.StatusOK,
 		},
 		{
@@ -745,7 +736,7 @@ func Test_findLatestChart(t *testing.T) {
 
 		var m mock.Mock
 		dbSession = mockstore.NewMockSession(&m)
-		m.On("All", &ChartsList).Run(func(args mock.Arguments) {
+		m.On("All", &utils.ChartsList).Run(func(args mock.Arguments) {
 			*args.Get(0).(*[]*models.Chart) = charts
 		})
 
@@ -757,9 +748,9 @@ func Test_findLatestChart(t *testing.T) {
 			"appversion": reqAppVersion,
 		}
 
-		listChartsWithFilters(w, req, params)
+		ListChartsWithFilters(w, req, params)
 
-		var b BodyAPIListResponse
+		var b utils.BodyAPIListResponse
 		json.NewDecoder(w.Body).Decode(&b)
 		if b.Data == nil {
 			t.Fatal("chart list shouldn't be null")
@@ -780,7 +771,7 @@ func Test_findLatestChart(t *testing.T) {
 
 		var m mock.Mock
 		dbSession = mockstore.NewMockSession(&m)
-		m.On("All", &ChartsList).Run(func(args mock.Arguments) {
+		m.On("All", &utils.ChartsList).Run(func(args mock.Arguments) {
 			*args.Get(0).(*[]*models.Chart) = charts
 		})
 
@@ -792,9 +783,9 @@ func Test_findLatestChart(t *testing.T) {
 			"appversion": reqAppVersion,
 		}
 
-		listChartsWithFilters(w, req, params)
+		ListChartsWithFilters(w, req, params)
 
-		var b BodyAPIListResponse
+		var b utils.BodyAPIListResponse
 		json.NewDecoder(w.Body).Decode(&b)
 		if b.Data == nil {
 			t.Fatal("chart list shouldn't be null")

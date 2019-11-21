@@ -24,18 +24,22 @@ import (
 	"testing"
 
 	"local/monocular/cmd/chartsvc/models"
+	"local/monocular/cmd/chartsvc/mongodb"
+	"local/monocular/cmd/chartsvc/utils"
 
 	"github.com/kubeapps/common/datastore/mockstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
+var dbType string = "mongodb"
+
 // tests the GET /live endpoint
 func Test_GetLive(t *testing.T) {
 	var m mock.Mock
 	dbSession = mockstore.NewMockSession(&m)
 
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL + "/live")
@@ -49,7 +53,7 @@ func Test_GetReady(t *testing.T) {
 	var m mock.Mock
 	dbSession = mockstore.NewMockSession(&m)
 
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL + "/ready")
@@ -60,7 +64,7 @@ func Test_GetReady(t *testing.T) {
 
 // tests the GET /{apiVersion}/charts endpoint
 func Test_GetCharts(t *testing.T) {
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	tests := []struct {
@@ -81,7 +85,9 @@ func Test_GetCharts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
-			m.On("All", &mongodb.ChartsList).Run(func(args mock.Arguments) {
+			mongodb.InitDBConfig(dbSession, "test")
+
+			m.On("All", &utils.ChartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})
 
@@ -92,7 +98,7 @@ func Test_GetCharts(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, res.StatusCode, http.StatusOK, "http status code should match")
 
-			var b mongodb.BodyAPIListResponse
+			var b utils.BodyAPIListResponse
 			json.NewDecoder(res.Body).Decode(&b)
 			assert.Len(t, *b.Data, len(tt.charts))
 		})
@@ -101,7 +107,7 @@ func Test_GetCharts(t *testing.T) {
 
 // tests the GET /{apiVersion}/charts/{repo} endpoint
 func Test_GetChartsInRepo(t *testing.T) {
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	tests := []struct {
@@ -123,7 +129,8 @@ func Test_GetChartsInRepo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
-			m.On("All", &mongodb.ChartsList).Run(func(args mock.Arguments) {
+			mongodb.InitDBConfig(dbSession, "test")
+			m.On("All", &utils.ChartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})
 
@@ -134,7 +141,7 @@ func Test_GetChartsInRepo(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, res.StatusCode, http.StatusOK, "http status code should match")
 
-			var b mongodb.BodyAPIListResponse
+			var b utils.BodyAPIListResponse
 			json.NewDecoder(res.Body).Decode(&b)
 			assert.Len(t, *b.Data, len(tt.charts))
 		})
@@ -143,7 +150,7 @@ func Test_GetChartsInRepo(t *testing.T) {
 
 // tests the GET /{apiVersion}/charts/{repo}/{chartName} endpoint
 func Test_GetChartInRepo(t *testing.T) {
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	tests := []struct {
@@ -176,6 +183,7 @@ func Test_GetChartInRepo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
+			mongodb.InitDBConfig(dbSession, "test")
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
 			} else {
@@ -196,7 +204,7 @@ func Test_GetChartInRepo(t *testing.T) {
 
 // tests the GET /{apiVersion}/charts/{repo}/{chartName}/versions endpoint
 func Test_ListChartVersions(t *testing.T) {
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	tests := []struct {
@@ -229,6 +237,7 @@ func Test_ListChartVersions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
+			mongodb.InitDBConfig(dbSession, "test")
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
 			} else {
@@ -249,7 +258,7 @@ func Test_ListChartVersions(t *testing.T) {
 
 // tests the GET /{apiVersion}/charts/{repo}/{chartName}/versions/{:version} endpoint
 func Test_GetChartVersion(t *testing.T) {
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	tests := []struct {
@@ -282,6 +291,7 @@ func Test_GetChartVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
+			mongodb.InitDBConfig(dbSession, "test")
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
 			} else {
@@ -302,7 +312,7 @@ func Test_GetChartVersion(t *testing.T) {
 
 // tests the GET /{apiVersion}/assets/{repo}/{chartName}/logo-160x160-fit.png endpoint
 func Test_GetChartIcon(t *testing.T) {
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	tests := []struct {
@@ -320,7 +330,7 @@ func Test_GetChartIcon(t *testing.T) {
 		{
 			"chart has icon",
 			nil,
-			models.Chart{ID: "my-repo/my-chart", RawIcon: mongodb.IconBytes()},
+			models.Chart{ID: "my-repo/my-chart", RawIcon: utils.IconBytes()},
 			http.StatusOK,
 		},
 		{
@@ -335,6 +345,7 @@ func Test_GetChartIcon(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
+			mongodb.InitDBConfig(dbSession, "test")
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
 			} else {
@@ -355,7 +366,7 @@ func Test_GetChartIcon(t *testing.T) {
 
 // tests the GET /{apiVersion}/assets/{repo}/{chartName}/versions/{version}/README.md endpoint
 func Test_GetChartReadme(t *testing.T) {
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	tests := []struct {
@@ -376,7 +387,7 @@ func Test_GetChartReadme(t *testing.T) {
 			"chart exists",
 			"1.2.3",
 			nil,
-			models.ChartFiles{ID: "my-repo/my-chart", Readme: mongodb.TestChartReadme},
+			models.ChartFiles{ID: "my-repo/my-chart", Readme: utils.TestChartReadme},
 			http.StatusOK,
 		},
 		{
@@ -392,6 +403,7 @@ func Test_GetChartReadme(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
+			mongodb.InitDBConfig(dbSession, "test")
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
 			} else {
@@ -412,7 +424,7 @@ func Test_GetChartReadme(t *testing.T) {
 
 // tests the GET /{apiVersion}/assets/{repo}/{chartName}/versions/{version}/values.yaml endpoint
 func Test_GetChartValues(t *testing.T) {
-	ts := httptest.NewServer(setupRoutes())
+	ts := httptest.NewServer(setupRoutes(&dbType))
 	defer ts.Close()
 
 	tests := []struct {
@@ -433,7 +445,7 @@ func Test_GetChartValues(t *testing.T) {
 			"chart exists",
 			"3.2.1",
 			nil,
-			models.ChartFiles{ID: "my-repo/my-chart", Values: mongodb.TestChartValues},
+			models.ChartFiles{ID: "my-repo/my-chart", Values: utils.TestChartValues},
 			http.StatusOK,
 		},
 		{
@@ -449,6 +461,7 @@ func Test_GetChartValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
+			mongodb.InitDBConfig(dbSession, "test")
 			if tt.err != nil {
 				m.On("One", mock.Anything).Return(tt.err)
 			} else {
