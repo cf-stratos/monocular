@@ -15,6 +15,7 @@ require (
 	github.com/gobwas/glob v0.2.3
 	github.com/golang/protobuf v1.2.0
 	github.com/golang/snappy v0.0.1 // indirect
+	github.com/google/go-cmp v0.3.1 // indirect
 	github.com/gorilla/context v1.1.1
 	github.com/gorilla/mux v1.6.2
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40

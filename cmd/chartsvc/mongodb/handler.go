@@ -20,10 +20,9 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strconv"
 
+	"local/monocular/cmd/chartsvc/common"
 	"local/monocular/cmd/chartsvc/models"
-	"local/monocular/cmd/chartsvc/utils"
 
 	"github.com/globalsign/mgo/bson"
 	"github.com/gorilla/mux"
@@ -62,45 +61,7 @@ func InitDBConfig(session datastore.Session, name string) {
 	dbSession = session
 }
 
-// getPageNumberAndSize extracts the page number and size of a request. Default (1, 0) if not set
-func getPageNumberAndSize(req *http.Request) (int, int) {
-	page := req.FormValue("page")
-	size := req.FormValue("size")
-	pageInt, err := strconv.ParseUint(page, 10, 64)
-	if err != nil {
-		pageInt = 1
-	}
-	// ParseUint will return 0 if size is a not positive integer
-	sizeInt, _ := strconv.ParseUint(size, 10, 64)
-	return int(pageInt), int(sizeInt)
-}
-
-// min returns the minimum of two integers.
-// We are not using math.Min since that compares float64
-// and it's unnecessarily complex.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func uniqChartList(charts []*models.Chart) []*models.Chart {
-	// We will keep track of unique digest:chart to avoid duplicates
-	chartDigests := map[string]bool{}
-	res := []*models.Chart{}
-	for _, c := range charts {
-		digest := c.ChartVersions[0].Digest
-		// Filter out the chart if we've seen the same digest before
-		if _, ok := chartDigests[digest]; !ok {
-			chartDigests[digest] = true
-			res = append(res, c)
-		}
-	}
-	return res
-}
-
-func getPaginatedChartList(repo string, pageNumber, pageSize int) (utils.ApiListResponse, interface{}, error) {
+func getPaginatedChartList(repo string, pageNumber, pageSize int) (common.ApiListResponse, interface{}, error) {
 	log.Info("Request for charts..")
 	db, closer := dbSession.DB()
 	defer closer()
@@ -132,7 +93,7 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (utils.ApiList
 		cc := count{}
 		err := c.Pipe(countPipeline).One(&cc)
 		if err != nil {
-			return utils.ApiListResponse{}, 0, err
+			return common.ApiListResponse{}, 0, err
 		}
 		totalPages = int(math.Ceil(float64(cc.Count) / float64(pageSize)))
 
@@ -148,16 +109,16 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (utils.ApiList
 	}
 	err := c.Pipe(pipeline).All(&charts)
 	if err != nil {
-		return utils.ApiListResponse{}, 0, err
+		return common.ApiListResponse{}, 0, err
 	}
 	log.Infof("Done. Returning %v charts.", len(charts))
-	return newChartListResponse(charts), utils.Meta{totalPages}, nil
+	return common.NewChartListResponse(charts, pathPrefix), common.Meta{totalPages}, nil
 }
 
 // listCharts returns a list of charts
 func ListCharts(w http.ResponseWriter, req *http.Request) {
 	log.Info("Request for charts..")
-	pageNumber, pageSize := getPageNumberAndSize(req)
+	pageNumber, pageSize := common.GetPageNumberAndSize(req)
 	cl, meta, err := getPaginatedChartList("", pageNumber, pageSize)
 	if err != nil {
 		log.WithError(err).Error("could not fetch charts")
@@ -171,7 +132,7 @@ func ListCharts(w http.ResponseWriter, req *http.Request) {
 // listRepoCharts returns a list of charts in the given repo
 func ListRepoCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	log.Info("Request for charts..")
-	pageNumber, pageSize := getPageNumberAndSize(req)
+	pageNumber, pageSize := common.GetPageNumberAndSize(req)
 	cl, meta, err := getPaginatedChartList(params["repo"], pageNumber, pageSize)
 	if err != nil {
 		log.WithError(err).Error("could not fetch charts")
@@ -194,7 +155,7 @@ func GetChart(w http.ResponseWriter, req *http.Request, params Params) {
 		return
 	}
 
-	cr := newChartResponse(&chart)
+	cr := common.NewChartResponse(&chart, pathPrefix)
 	response.NewDataResponse(cr).Write(w)
 }
 
@@ -210,7 +171,7 @@ func ListChartVersions(w http.ResponseWriter, req *http.Request, params Params) 
 		return
 	}
 
-	cvl := newChartVersionListResponse(&chart)
+	cvl := common.NewChartVersionListResponse(&chart, pathPrefix)
 	response.NewDataResponse(cvl).Write(w)
 }
 
@@ -232,7 +193,7 @@ func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 		return
 	}
 
-	cvr := newChartVersionResponse(&chart, chart.ChartVersions[0])
+	cvr := common.NewChartVersionResponse(&chart, chart.ChartVersions[0], pathPrefix)
 	response.NewDataResponse(cvr).Write(w)
 }
 
@@ -312,7 +273,7 @@ func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Para
 		// continue to return empty list
 	}
 
-	cl := newChartListResponse(uniqChartList(charts))
+	cl := common.NewChartListResponse(common.UniqChartList(charts), pathPrefix)
 	response.NewDataResponse(cl).Write(w)
 }
 
@@ -350,70 +311,6 @@ func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 		// continue to return empty list
 	}
 
-	cl := newChartListResponse(uniqChartList(charts))
+	cl := common.NewChartListResponse(common.UniqChartList(charts), pathPrefix)
 	response.NewDataResponse(cl).Write(w)
-}
-
-func newChartResponse(c *models.Chart) *utils.ApiResponse {
-	latestCV := c.ChartVersions[0]
-	return &utils.ApiResponse{
-		Type:       "chart",
-		ID:         c.ID,
-		Attributes: chartAttributes(*c),
-		Links:      utils.SelfLink{pathPrefix + "/charts/" + c.ID},
-		Relationships: utils.RelMap{
-			"latestChartVersion": utils.Rel{
-				Data:  chartVersionAttributes(c.ID, latestCV),
-				Links: utils.SelfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + latestCV.Version},
-			},
-		},
-	}
-}
-
-func newChartListResponse(charts []*models.Chart) utils.ApiListResponse {
-	cl := utils.ApiListResponse{}
-	for _, c := range charts {
-		cl = append(cl, newChartResponse(c))
-	}
-	return cl
-}
-
-func chartVersionAttributes(cid string, cv models.ChartVersion) models.ChartVersion {
-	cv.Readme = pathPrefix + "/assets/" + cid + "/versions/" + cv.Version + "/README.md"
-	cv.Values = pathPrefix + "/assets/" + cid + "/versions/" + cv.Version + "/values.yaml"
-	return cv
-}
-
-func chartAttributes(c models.Chart) models.Chart {
-	if c.RawIcon != nil {
-		c.Icon = pathPrefix + "/assets/" + c.ID + "/logo-160x160-fit.png"
-	} else {
-		// If the icon wasn't processed, it is either not set or invalid
-		c.Icon = ""
-	}
-	return c
-}
-
-func newChartVersionResponse(c *models.Chart, cv models.ChartVersion) *utils.ApiResponse {
-	return &utils.ApiResponse{
-		Type:       "chartVersion",
-		ID:         fmt.Sprintf("%s-%s", c.ID, cv.Version),
-		Attributes: chartVersionAttributes(c.ID, cv),
-		Links:      utils.SelfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + cv.Version},
-		Relationships: utils.RelMap{
-			"chart": utils.Rel{
-				Data:  chartAttributes(*c),
-				Links: utils.SelfLink{pathPrefix + "/charts/" + c.ID},
-			},
-		},
-	}
-}
-
-func newChartVersionListResponse(c *models.Chart) utils.ApiListResponse {
-	var cvl utils.ApiListResponse
-	for _, cv := range c.ChartVersions {
-		cvl = append(cvl, newChartVersionResponse(c, cv))
-	}
-
-	return cvl
 }

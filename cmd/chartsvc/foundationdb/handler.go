@@ -22,7 +22,6 @@ import (
 	"math"
 	"net/http"
 	"sort"
-	"strconv"
 
 	"local/monocular/cmd/chartsvc/foundationdb/datastore"
 	"local/monocular/cmd/chartsvc/models"
@@ -49,30 +48,6 @@ func (h WithParams) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 const chartCollection = "charts"
 const filesCollection = "files"
 
-type apiResponse struct {
-	ID            string      `json:"id"`
-	Type          string      `json:"type"`
-	Attributes    interface{} `json:"attributes"`
-	Links         interface{} `json:"links"`
-	Relationships relMap      `json:"relationships"`
-}
-
-type apiListResponse []*apiResponse
-
-type selfLink struct {
-	Self string `json:"self"`
-}
-
-type relMap map[string]rel
-type rel struct {
-	Data  interface{} `json:"data"`
-	Links selfLink    `json:"links"`
-}
-
-type meta struct {
-	TotalPages int `json:"totalPages"`
-}
-
 // count is used to parse the result of a $count operation in the database
 type count struct {
 	Count int
@@ -94,44 +69,6 @@ func InitDBConfig(client datastore.Client, name string) {
 	dbClient = client
 	db, dbCloser = dbClient.Database(name)
 	dbName = name
-}
-
-// getPageNumberAndSize extracts the page number and size of a request. Default (1, 0) if not set
-func getPageNumberAndSize(req *http.Request) (int, int) {
-	page := req.FormValue("page")
-	size := req.FormValue("size")
-	pageInt, err := strconv.ParseUint(page, 10, 64)
-	if err != nil {
-		pageInt = 1
-	}
-	// ParseUint will return 0 if size is a not positive integer
-	sizeInt, _ := strconv.ParseUint(size, 10, 64)
-	return int(pageInt), int(sizeInt)
-}
-
-// min returns the minimum of two integers.
-// We are not using math.Min since that compares float64
-// and it's unnecessarily complex.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func uniqChartList(charts []*models.Chart) []*models.Chart {
-	// We will keep track of unique digest:chart to avoid duplicates
-	chartDigests := map[string]bool{}
-	res := []*models.Chart{}
-	for _, c := range charts {
-		digest := c.ChartVersions[0].Digest
-		// Filter out the chart if we've seen the same digest before
-		if _, ok := chartDigests[digest]; !ok {
-			chartDigests[digest] = true
-			res = append(res, c)
-		}
-	}
-	return res
 }
 
 func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListResponse, interface{}, error) {
@@ -418,68 +355,4 @@ func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 
 	cl := newChartListResponse(uniqChartList(charts))
 	response.NewDataResponse(cl).Write(w)
-}
-
-func newChartResponse(c *models.Chart) *apiResponse {
-	latestCV := c.ChartVersions[0]
-	return &apiResponse{
-		Type:       "chart",
-		ID:         c.ID,
-		Attributes: chartAttributes(*c),
-		Links:      selfLink{pathPrefix + "/charts/" + c.ID},
-		Relationships: relMap{
-			"latestChartVersion": rel{
-				Data:  chartVersionAttributes(c.ID, latestCV),
-				Links: selfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + latestCV.Version},
-			},
-		},
-	}
-}
-
-func newChartListResponse(charts []*models.Chart) apiListResponse {
-	cl := apiListResponse{}
-	for _, c := range charts {
-		cl = append(cl, newChartResponse(c))
-	}
-	return cl
-}
-
-func chartVersionAttributes(cid string, cv models.ChartVersion) models.ChartVersion {
-	cv.Readme = pathPrefix + "/assets/" + cid + "/versions/" + cv.Version + "/README.md"
-	cv.Values = pathPrefix + "/assets/" + cid + "/versions/" + cv.Version + "/values.yaml"
-	return cv
-}
-
-func chartAttributes(c models.Chart) models.Chart {
-	if c.RawIcon != nil {
-		c.Icon = pathPrefix + "/assets/" + c.ID + "/logo-160x160-fit.png"
-	} else {
-		// If the icon wasn't processed, it is either not set or invalid
-		c.Icon = ""
-	}
-	return c
-}
-
-func newChartVersionResponse(c *models.Chart, cv models.ChartVersion) *apiResponse {
-	return &apiResponse{
-		Type:       "chartVersion",
-		ID:         fmt.Sprintf("%s-%s", c.ID, cv.Version),
-		Attributes: chartVersionAttributes(c.ID, cv),
-		Links:      selfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + cv.Version},
-		Relationships: relMap{
-			"chart": rel{
-				Data:  chartAttributes(*c),
-				Links: selfLink{pathPrefix + "/charts/" + c.ID},
-			},
-		},
-	}
-}
-
-func newChartVersionListResponse(c *models.Chart) apiListResponse {
-	var cvl apiListResponse
-	for _, cv := range c.ChartVersions {
-		cvl = append(cvl, newChartVersionResponse(c, cv))
-	}
-
-	return cvl
 }
