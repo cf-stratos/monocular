@@ -29,11 +29,11 @@ func NewChartResponse(c *models.Chart, pathPrefix string) *ApiResponse {
 	return &ApiResponse{
 		Type:       "chart",
 		ID:         c.ID,
-		Attributes: chartAttributes(*c, pathPrefix),
+		Attributes: ChartAttributes(*c, pathPrefix),
 		Links:      SelfLink{pathPrefix + "/charts/" + c.ID},
 		Relationships: RelMap{
 			"latestChartVersion": Rel{
-				Data:  chartVersionAttributes(c.ID, latestCV, pathPrefix),
+				Data:  ChartVersionAttributes(c.ID, latestCV, pathPrefix),
 				Links: SelfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + latestCV.Version},
 			},
 		},
@@ -52,11 +52,11 @@ func NewChartVersionResponse(c *models.Chart, cv models.ChartVersion, pathPrefix
 	return &ApiResponse{
 		Type:       "chartVersion",
 		ID:         fmt.Sprintf("%s-%s", c.ID, cv.Version),
-		Attributes: chartVersionAttributes(c.ID, cv, pathPrefix),
+		Attributes: ChartVersionAttributes(c.ID, cv, pathPrefix),
 		Links:      SelfLink{pathPrefix + "/charts/" + c.ID + "/versions/" + cv.Version},
 		Relationships: RelMap{
 			"chart": Rel{
-				Data:  chartAttributes(*c, pathPrefix),
+				Data:  ChartAttributes(*c, pathPrefix),
 				Links: SelfLink{pathPrefix + "/charts/" + c.ID},
 			},
 		},

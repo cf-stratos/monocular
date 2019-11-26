@@ -21,13 +21,13 @@ type Meta struct {
 	TotalPages int `json:"totalPages"`
 }
 
-func chartVersionAttributes(cid string, cv models.ChartVersion, pathPrefix string) models.ChartVersion {
+func ChartVersionAttributes(cid string, cv models.ChartVersion, pathPrefix string) models.ChartVersion {
 	cv.Readme = pathPrefix + "/assets/" + cid + "/versions/" + cv.Version + "/README.md"
 	cv.Values = pathPrefix + "/assets/" + cid + "/versions/" + cv.Version + "/values.yaml"
 	return cv
 }
 
-func chartAttributes(c models.Chart, pathPrefix string) models.Chart {
+func ChartAttributes(c models.Chart, pathPrefix string) models.Chart {
 	if c.RawIcon != nil {
 		c.Icon = pathPrefix + "/assets/" + c.ID + "/logo-160x160-fit.png"
 	} else {

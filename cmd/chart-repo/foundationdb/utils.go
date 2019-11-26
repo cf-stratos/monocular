@@ -48,6 +48,14 @@ const (
 
 var netClient common.HttpClient = &http.Client{}
 
+func init() {
+	var err error
+	netClient, err = common.InitNetClient(additionalCAFile, defaultTimeoutSeconds)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 // SyncRepo Syncing is performed in the following steps:
 // 1. Update database to match chart metadata from index
 // 2. Concurrently process icons for charts (concurrently)

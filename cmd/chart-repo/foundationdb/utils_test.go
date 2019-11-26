@@ -33,7 +33,7 @@ import (
 	"strings"
 	"testing"
 
-	"local/monocular/cmd/chart-repo/types"
+	"local/monocular/cmd/chart-repo/common"
 	"local/monocular/cmd/chart-repo/utils"
 
 	"github.com/arschles/assert"
@@ -99,7 +99,7 @@ func (h *goodIconClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 type goodTarballClient struct {
-	c          types.Chart
+	c          common.Chart
 	skipReadme bool
 	skipValues bool
 }
@@ -123,7 +123,7 @@ func (h *goodTarballClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 type authenticatedTarballClient struct {
-	c types.Chart
+	c common.Chart
 }
 
 func (h *authenticatedTarballClient) Do(req *http.Request) (*http.Response, error) {
@@ -164,26 +164,26 @@ func Test_syncURLInvalidity(t *testing.T) {
 func Test_fetchRepoIndex(t *testing.T) {
 	tests := []struct {
 		name string
-		r    types.Repo
+		r    common.Repo
 	}{
-		{"valid HTTP URL", types.Repo{URL: "http://my.examplerepo.com"}},
-		{"valid HTTPS URL", types.Repo{URL: "https://my.examplerepo.com"}},
-		{"valid trailing URL", types.Repo{URL: "https://my.examplerepo.com/"}},
-		{"valid subpath URL", types.Repo{URL: "https://subpath.test/subpath/"}},
-		{"valid URL with trailing spaces", types.Repo{URL: "https://subpath.test/subpath/  "}},
-		{"valid URL with leading spaces", types.Repo{URL: "  https://subpath.test/subpath/"}},
+		{"valid HTTP URL", common.Repo{URL: "http://my.examplerepo.com"}},
+		{"valid HTTPS URL", common.Repo{URL: "https://my.examplerepo.com"}},
+		{"valid trailing URL", common.Repo{URL: "https://my.examplerepo.com/"}},
+		{"valid subpath URL", common.Repo{URL: "https://subpath.test/subpath/"}},
+		{"valid URL with trailing spaces", common.Repo{URL: "https://subpath.test/subpath/  "}},
+		{"valid URL with leading spaces", common.Repo{URL: "  https://subpath.test/subpath/"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			netClient = &goodHTTPClient{}
-			_, err := fetchRepoIndex(tt.r)
+			_, err := common.FetchRepoIndex(tt.r, netClient)
 			assert.NoErr(t, err)
 		})
 	}
 
 	t.Run("failed request", func(t *testing.T) {
 		netClient = &badHTTPClient{}
-		_, err := fetchRepoIndex(types.Repo{URL: "https://my.examplerepo.com"})
+		_, err := common.FetchRepoIndex(common.Repo{URL: "https://my.examplerepo.com"}, netClient)
 		assert.ExistsErr(t, err, "failed request")
 	})
 }
@@ -220,7 +220,7 @@ func Test_fetchRepoIndexUserAgent(t *testing.T) {
 
 			netClient = server.Client()
 
-			_, err := fetchRepoIndex(types.Repo{URL: server.URL})
+			_, err := common.FetchRepoIndex(common.Repo{URL: server.URL}, netClient)
 			assert.NoErr(t, err)
 		})
 	}
@@ -235,13 +235,13 @@ func Test_parseRepoIndex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseRepoIndex([]byte(tt.repoYAML))
+			_, err := common.ParseRepoIndex([]byte(tt.repoYAML))
 			assert.ExistsErr(t, err, tt.name)
 		})
 	}
 
 	t.Run("valid", func(t *testing.T) {
-		index, err := parseRepoIndex([]byte(validRepoIndexYAML))
+		index, err := common.ParseRepoIndex([]byte(validRepoIndexYAML))
 		assert.NoErr(t, err)
 		assert.Equal(t, len(index.Entries), 2, "number of charts")
 		assert.Equal(t, index.Entries["acs-engine-autoscaler"][0].GetName(), "acs-engine-autoscaler", "chart version populated")
@@ -249,25 +249,25 @@ func Test_parseRepoIndex(t *testing.T) {
 }
 
 func Test_chartsFromIndex(t *testing.T) {
-	r := types.Repo{Name: "test", URL: "http://testrepo.com"}
-	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
-	charts := chartsFromIndex(index, r)
+	r := common.Repo{Name: "test", URL: "http://testrepo.com"}
+	index, _ := common.ParseRepoIndex([]byte(validRepoIndexYAML))
+	charts := common.ChartsFromIndex(index, r)
 	assert.Equal(t, len(charts), 2, "number of charts")
 
 	indexWithDeprecated := validRepoIndexYAML + `
   deprecated-chart:
   - name: deprecated-chart
     deprecated: true`
-	index2, err := parseRepoIndex([]byte(indexWithDeprecated))
+	index2, err := common.ParseRepoIndex([]byte(indexWithDeprecated))
 	assert.NoErr(t, err)
-	charts = chartsFromIndex(index2, r)
+	charts = common.ChartsFromIndex(index2, r)
 	assert.Equal(t, len(charts), 2, "number of charts")
 }
 
 func Test_newChart(t *testing.T) {
-	r := types.Repo{Name: "test", URL: "http://testrepo.com"}
-	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
-	c := newChart(index.Entries["wordpress"], r)
+	r := common.Repo{Name: "test", URL: "http://testrepo.com"}
+	index, _ := common.ParseRepoIndex([]byte(validRepoIndexYAML))
+	c := common.NewChart(index.Entries["wordpress"], r)
 	assert.Equal(t, c.Name, "wordpress", "correctly built")
 	assert.Equal(t, len(c.ChartVersions), 2, "correctly built")
 	assert.Equal(t, c.Description, "new description!", "takes chart fields from latest entry")
@@ -282,8 +282,8 @@ func Test_importCharts(t *testing.T) {
 	m.On("DeleteMany", mock.Anything, mock.Anything, mock.Anything).Return(&mongo.DeleteResult{}, nil)
 	dbClient := NewMockClient(m)
 	db, _ := dbClient.Database("test")
-	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
-	charts := chartsFromIndex(index, types.Repo{Name: "test", URL: "http://testrepo.com"})
+	index, _ := common.ParseRepoIndex([]byte(validRepoIndexYAML))
+	charts := common.ChartsFromIndex(index, common.Repo{Name: "test", URL: "http://testrepo.com"})
 	importCharts(db, "test", charts)
 
 	m.AssertExpectations(t)
@@ -317,12 +317,12 @@ func Test_fetchAndImportIcon(t *testing.T) {
 		m := mock.Mock{}
 		dbClient := NewMockClient(&m)
 		db, _ := dbClient.Database("test")
-		c := types.Chart{ID: "test/acs-engine-autoscaler"}
+		c := common.Chart{ID: "test/acs-engine-autoscaler"}
 		assert.NoErr(t, fetchAndImportIcon(db, c))
 	})
 
-	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
-	charts := chartsFromIndex(index, types.Repo{Name: "test", URL: "http://testrepo.com"})
+	index, _ := common.ParseRepoIndex([]byte(validRepoIndexYAML))
+	charts := common.ChartsFromIndex(index, common.Repo{Name: "test", URL: "http://testrepo.com"})
 
 	t.Run("failed download", func(t *testing.T) {
 		netClient = &badHTTPClient{}
@@ -355,8 +355,8 @@ func Test_fetchAndImportIcon(t *testing.T) {
 }
 
 func Test_fetchAndImportFiles(t *testing.T) {
-	index, _ := parseRepoIndex([]byte(validRepoIndexYAML))
-	charts := chartsFromIndex(index, types.Repo{Name: "test", URL: "http://testrepo.com", AuthorizationHeader: "Bearer ThisSecretAccessTokenAuthenticatesTheClient1s"})
+	index, _ := common.ParseRepoIndex([]byte(validRepoIndexYAML))
+	charts := common.ChartsFromIndex(index, common.Repo{Name: "test", URL: "http://testrepo.com", AuthorizationHeader: "Bearer ThisSecretAccessTokenAuthenticatesTheClient1s"})
 	cv := charts[0].ChartVersions[0]
 
 	t.Run("http error", func(t *testing.T) {
@@ -373,7 +373,7 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m := mock.Mock{}
 		m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mongo.ErrNoDocuments)
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		chartFiles := types.ChartFiles{chartFilesID, "", "", charts[0].Repo, cv.Digest}
+		chartFiles := common.ChartFiles{chartFilesID, "", "", charts[0].Repo, cv.Digest}
 		chartBSON, _ := bson.Marshal(&chartFiles)
 		var doc bson.M
 		bson.Unmarshal(chartBSON, &doc)
@@ -392,7 +392,7 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m := mock.Mock{}
 		m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mongo.ErrNoDocuments)
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		chartFiles := types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest}
+		chartFiles := common.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest}
 		chartBSON, _ := bson.Marshal(&chartFiles)
 		var doc bson.M
 		bson.Unmarshal(chartBSON, &doc)
@@ -411,7 +411,7 @@ func Test_fetchAndImportFiles(t *testing.T) {
 		m := mock.Mock{}
 		m.On("FindOne", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mongo.ErrNoDocuments)
 		chartFilesID := fmt.Sprintf("%s/%s-%s", charts[0].Repo.Name, charts[0].Name, cv.Version)
-		chartFiles := types.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest}
+		chartFiles := common.ChartFiles{chartFilesID, testChartReadme, testChartValues, charts[0].Repo, cv.Digest}
 		chartBSON, _ := bson.Marshal(&chartFiles)
 		var doc bson.M
 		bson.Unmarshal(chartBSON, &doc)
@@ -438,19 +438,19 @@ func Test_fetchAndImportFiles(t *testing.T) {
 }
 
 func Test_chartTarballURL(t *testing.T) {
-	r := types.Repo{Name: "test", URL: "http://testrepo.com"}
+	r := common.Repo{Name: "test", URL: "http://testrepo.com"}
 	tests := []struct {
 		name   string
-		cv     types.ChartVersion
+		cv     common.ChartVersion
 		wanted string
 	}{
-		{"absolute url", types.ChartVersion{URLs: []string{"http://testrepo.com/wordpress-0.1.0.tgz"}}, "http://testrepo.com/wordpress-0.1.0.tgz"},
-		{"relative url", types.ChartVersion{URLs: []string{"wordpress-0.1.0.tgz"}}, "http://testrepo.com/wordpress-0.1.0.tgz"},
+		{"absolute url", common.ChartVersion{URLs: []string{"http://testrepo.com/wordpress-0.1.0.tgz"}}, "http://testrepo.com/wordpress-0.1.0.tgz"},
+		{"relative url", common.ChartVersion{URLs: []string{"wordpress-0.1.0.tgz"}}, "http://testrepo.com/wordpress-0.1.0.tgz"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, chartTarballURL(r, tt.cv), tt.wanted, "url")
+			assert.Equal(t, common.ChartTarballURL(r, tt.cv), tt.wanted, "url")
 		})
 	}
 }
@@ -473,7 +473,7 @@ func Test_extractFilesFromTarball(t *testing.T) {
 			createTestTarball(&b, tt.files)
 			r := bytes.NewReader(b.Bytes())
 			tarf := tar.NewReader(r)
-			files, err := extractFilesFromTarball([]string{tt.filename}, tarf)
+			files, err := common.ExtractFilesFromTarball([]string{tt.filename}, tarf)
 			assert.NoErr(t, err)
 			assert.Equal(t, files[tt.filename], tt.want, "file body")
 		})
@@ -485,7 +485,7 @@ func Test_extractFilesFromTarball(t *testing.T) {
 		createTestTarball(&b, tFiles)
 		r := bytes.NewReader(b.Bytes())
 		tarf := tar.NewReader(r)
-		files, err := extractFilesFromTarball([]string{tFiles[0].Name, tFiles[1].Name}, tarf)
+		files, err := common.ExtractFilesFromTarball([]string{tFiles[0].Name, tFiles[1].Name}, tarf)
 		assert.NoErr(t, err)
 		assert.Equal(t, len(files), 2, "matches")
 		for _, f := range tFiles {
@@ -499,7 +499,7 @@ func Test_extractFilesFromTarball(t *testing.T) {
 		r := bytes.NewReader(b.Bytes())
 		tarf := tar.NewReader(r)
 		name := "file2.txt"
-		files, err := extractFilesFromTarball([]string{name}, tarf)
+		files, err := common.ExtractFilesFromTarball([]string{name}, tarf)
 		assert.NoErr(t, err)
 		assert.Equal(t, files[name], "", "file body")
 	})
@@ -509,7 +509,7 @@ func Test_extractFilesFromTarball(t *testing.T) {
 		rand.Read(b)
 		r := bytes.NewReader(b)
 		tarf := tar.NewReader(r)
-		files, err := extractFilesFromTarball([]string{"file2.txt"}, tarf)
+		files, err := common.ExtractFilesFromTarball([]string{"file2.txt"}, tarf)
 		assert.Err(t, io.ErrUnexpectedEOF, err)
 		assert.Equal(t, len(files), 0, "file body")
 	})
@@ -576,7 +576,7 @@ h251U/Daz6NiQBM9AxyAw6EHm8XAZBvCuebfzyrT
 		t.Error(err)
 	}
 
-	_, err = initNetClient(otherCA)
+	_, err = common.InitNetClient(otherCA, defaultTimeoutSeconds)
 	if err != nil {
 		t.Error(err)
 	}

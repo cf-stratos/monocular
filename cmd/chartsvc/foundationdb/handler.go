@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"sort"
 
+	"local/monocular/cmd/chartsvc/common"
 	"local/monocular/cmd/chartsvc/foundationdb/datastore"
 	"local/monocular/cmd/chartsvc/models"
 
@@ -71,7 +72,7 @@ func InitDBConfig(client datastore.Client, name string) {
 	dbName = name
 }
 
-func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListResponse, interface{}, error) {
+func getPaginatedChartList(repo string, pageNumber, pageSize int) (common.ApiListResponse, interface{}, error) {
 	log.Info("Request for paginated chart list..")
 
 	//Find all charts for repo name and sort by chart name
@@ -87,7 +88,7 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 			"Error fetching charts from DB for pagination %s",
 			repo,
 		)
-		return newChartListResponse([]*models.Chart{}), meta{0}, err
+		return common.NewChartListResponse([]*models.Chart{}, pathPrefix), common.Meta{0}, err
 	}
 	var tempChartMap map[string]*models.Chart = make(map[string]*models.Chart)
 
@@ -130,13 +131,13 @@ func getPaginatedChartList(repo string, pageNumber, pageSize int) (apiListRespon
 	}
 
 	log.Infof("Returning %v charts, Done.", len(paginatedCharts))
-	return newChartListResponse(paginatedCharts), meta{totalPages}, nil
+	return common.NewChartListResponse(paginatedCharts, pathPrefix), common.Meta{totalPages}, nil
 }
 
 // ListCharts returns a list of charts
 func ListCharts(w http.ResponseWriter, req *http.Request) {
 	log.Info("Request for charts..")
-	pageNumber, pageSize := getPageNumberAndSize(req)
+	pageNumber, pageSize := common.GetPageNumberAndSize(req)
 	cl, meta, err := getPaginatedChartList("", pageNumber, pageSize)
 	if err != nil {
 		log.WithError(err).Error("could not fetch charts")
@@ -150,7 +151,7 @@ func ListCharts(w http.ResponseWriter, req *http.Request) {
 // ListRepoCharts returns a list of charts in the given repo
 func ListRepoCharts(w http.ResponseWriter, req *http.Request, params Params) {
 	log.Info("Request for charts..")
-	pageNumber, pageSize := getPageNumberAndSize(req)
+	pageNumber, pageSize := common.GetPageNumberAndSize(req)
 	cl, meta, err := getPaginatedChartList(params["repo"], pageNumber, pageSize)
 	if err != nil {
 		log.WithError(err).Error("could not fetch charts")
@@ -175,7 +176,7 @@ func GetChart(w http.ResponseWriter, req *http.Request, params Params) {
 		return
 	}
 
-	cr := newChartResponse(&chart)
+	cr := common.NewChartResponse(&chart, pathPrefix)
 	response.NewDataResponse(cr).Write(w)
 }
 
@@ -193,7 +194,7 @@ func ListChartVersions(w http.ResponseWriter, req *http.Request, params Params) 
 		return
 	}
 
-	cvl := newChartVersionListResponse(&chart)
+	cvl := common.NewChartVersionListResponse(&chart, pathPrefix)
 	response.NewDataResponse(cvl).Write(w)
 }
 
@@ -225,7 +226,7 @@ func GetChartVersion(w http.ResponseWriter, req *http.Request, params Params) {
 		}
 	}
 	// Cut the versions slice down to just one element
-	cvr := newChartVersionResponse(&chart, chart.ChartVersions[0])
+	cvr := common.NewChartVersionResponse(&chart, chart.ChartVersions[0], pathPrefix)
 	response.NewDataResponse(cvr).Write(w)
 }
 
@@ -314,7 +315,7 @@ func ListChartsWithFilters(w http.ResponseWriter, req *http.Request, params Para
 		// continue to return empty list
 	}
 
-	cl := newChartListResponse(uniqChartList(charts))
+	cl := common.NewChartListResponse(common.UniqChartList(charts), pathPrefix)
 	response.NewDataResponse(cl).Write(w)
 }
 
@@ -353,6 +354,6 @@ func SearchCharts(w http.ResponseWriter, req *http.Request, params Params) {
 		// continue to return empty list
 	}
 
-	cl := newChartListResponse(uniqChartList(charts))
+	cl := common.NewChartListResponse(common.UniqChartList(charts), pathPrefix)
 	response.NewDataResponse(cl).Write(w)
 }

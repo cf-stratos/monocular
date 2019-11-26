@@ -23,9 +23,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"local/monocular/cmd/chartsvc/common"
 	"local/monocular/cmd/chartsvc/models"
 	"local/monocular/cmd/chartsvc/mongodb"
-	"local/monocular/cmd/chartsvc/utils"
 
 	"github.com/kubeapps/common/datastore/mockstore"
 	"github.com/stretchr/testify/assert"
@@ -87,7 +87,7 @@ func Test_GetCharts(t *testing.T) {
 			dbSession = mockstore.NewMockSession(&m)
 			mongodb.InitDBConfig(dbSession, "test")
 
-			m.On("All", &utils.ChartsList).Run(func(args mock.Arguments) {
+			m.On("All", &common.ChartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})
 
@@ -98,7 +98,7 @@ func Test_GetCharts(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, res.StatusCode, http.StatusOK, "http status code should match")
 
-			var b utils.BodyAPIListResponse
+			var b common.BodyAPIListResponse
 			json.NewDecoder(res.Body).Decode(&b)
 			assert.Len(t, *b.Data, len(tt.charts))
 		})
@@ -130,7 +130,7 @@ func Test_GetChartsInRepo(t *testing.T) {
 			var m mock.Mock
 			dbSession = mockstore.NewMockSession(&m)
 			mongodb.InitDBConfig(dbSession, "test")
-			m.On("All", &utils.ChartsList).Run(func(args mock.Arguments) {
+			m.On("All", &common.ChartsList).Run(func(args mock.Arguments) {
 				*args.Get(0).(*[]*models.Chart) = tt.charts
 			})
 
@@ -141,7 +141,7 @@ func Test_GetChartsInRepo(t *testing.T) {
 			m.AssertExpectations(t)
 			assert.Equal(t, res.StatusCode, http.StatusOK, "http status code should match")
 
-			var b utils.BodyAPIListResponse
+			var b common.BodyAPIListResponse
 			json.NewDecoder(res.Body).Decode(&b)
 			assert.Len(t, *b.Data, len(tt.charts))
 		})
@@ -330,7 +330,7 @@ func Test_GetChartIcon(t *testing.T) {
 		{
 			"chart has icon",
 			nil,
-			models.Chart{ID: "my-repo/my-chart", RawIcon: utils.IconBytes()},
+			models.Chart{ID: "my-repo/my-chart", RawIcon: common.IconBytes()},
 			http.StatusOK,
 		},
 		{
@@ -387,7 +387,7 @@ func Test_GetChartReadme(t *testing.T) {
 			"chart exists",
 			"1.2.3",
 			nil,
-			models.ChartFiles{ID: "my-repo/my-chart", Readme: utils.TestChartReadme},
+			models.ChartFiles{ID: "my-repo/my-chart", Readme: common.TestChartReadme},
 			http.StatusOK,
 		},
 		{
@@ -445,7 +445,7 @@ func Test_GetChartValues(t *testing.T) {
 			"chart exists",
 			"3.2.1",
 			nil,
-			models.ChartFiles{ID: "my-repo/my-chart", Values: utils.TestChartValues},
+			models.ChartFiles{ID: "my-repo/my-chart", Values: common.TestChartValues},
 			http.StatusOK,
 		},
 		{

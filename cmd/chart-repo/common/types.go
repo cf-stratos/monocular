@@ -94,15 +94,7 @@ func ParseRepoUrl(repoURL string) (*url.URL, error) {
 	return url.ParseRequestURI(repoURL)
 }
 
-func InitNetClient(netClient *http.Client, additionalCAFile string, defaultTimeOut time.Duration) {
-	var err error
-	netClient, err = initNetClient(additionalCAFile, defaultTimeOut)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func initNetClient(additionalCA string, defaultTimeoutSeconds time.Duration) (*http.Client, error) {
+func InitNetClient(additionalCA string, defaultTimeoutSeconds time.Duration) (*http.Client, error) {
 	// Get the SystemCertPool, continue with an empty pool on error
 	caCertPool, _ := x509.SystemCertPool()
 	if caCertPool == nil {
@@ -170,10 +162,10 @@ func FetchRepoIndex(r Repo, netClient HttpClient) (*helmrepo.IndexFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseRepoIndex(body)
+	return ParseRepoIndex(body)
 }
 
-func parseRepoIndex(body []byte) (*helmrepo.IndexFile, error) {
+func ParseRepoIndex(body []byte) (*helmrepo.IndexFile, error) {
 	var index helmrepo.IndexFile
 	err := yaml.Unmarshal(body, &index)
 	if err != nil {
@@ -190,14 +182,14 @@ func ChartsFromIndex(index *helmrepo.IndexFile, r Repo) []Chart {
 			log.WithFields(log.Fields{"name": entry[0].GetName()}).Info("skipping deprecated chart")
 			continue
 		}
-		charts = append(charts, newChart(entry, r))
+		charts = append(charts, NewChart(entry, r))
 	}
 	return charts
 }
 
 // Takes an entry from the index and constructs a database representation of the
 // object.
-func newChart(entry helmrepo.ChartVersions, r Repo) Chart {
+func NewChart(entry helmrepo.ChartVersions, r Repo) Chart {
 	var c Chart
 	copier.Copy(&c, entry[0])
 	copier.Copy(&c.ChartVersions, entry)
