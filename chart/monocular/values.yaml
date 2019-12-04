@@ -2,9 +2,8 @@ sync:
   # Image used to perform chart repository syncs
   image:
     registry: docker.io
-    repository: kreinecke/chart-repo
+    repository: kreinecke/suse-fdb-chart-repo
     tag: latest
-    pullPolicy: Always
   repos:
     # Official repositories
     - name: stable
@@ -37,9 +36,8 @@ sync:
 chartsvc:
   image:
     registry: docker.io
-    repository: kreinecke/chartsvc
+    repository: kreinecke/suse-fdb-chartsvc
     tag: latest
-    pullPolicy: Always
   service:
     port: 8080
   replicas: 3
@@ -146,7 +144,7 @@ ingress:
   #   secretName: monocular.local-tls
 
 fdbserver:
-  enabled: false
+  enabled: true
 
 # External MongoDB connection URL.
 # This must be set if mongodb.enabled and foundationdb are set to false, following the pattern:

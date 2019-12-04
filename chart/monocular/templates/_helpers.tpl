@@ -59,15 +59,6 @@ spec:
     - {{ $repo.url }}
     command:
     - /chart-repo
-    {{- if or $global.Values.mongodb.enabled $global.Values.fdbserver.enabled}}
-    env:
-    - name: HTTP_PROXY
-      value: {{ $global.Values.sync.httpProxy }}
-    - name: HTTPS_PROXY
-      value: {{ $global.Values.sync.httpsProxy }}
-    - name: NO_PROXY
-      value: {{ $global.Values.sync.noProxy }}
-    {{- end }}
     resources:
 {{ toYaml $global.Values.sync.resources | indent 6 }}
 {{- with $global.Values.sync.nodeSelector }}
