@@ -16,14 +16,6 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- end -}}
 
 {{/*
-Create a default fully qualified app name.
-We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
-*/}}
-{{- define "mongodb.fullname" -}}
-{{- printf "%s-%s" .Release.Name "mongodb" | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-
-{{/*
 Render image reference
 */}}
 {{- define "monocular.image" -}}
@@ -58,16 +50,10 @@ spec:
     - sync
     - --debug={{ default false $global.Values.debug }}
     - --user-agent-comment=monocular/{{ $global.Chart.AppVersion }}
-    {{- if and $global.Values.global.mongoUrl (and (not $global.Values.mongodb.enabled) (not $global.Values.fdbserver.enabled))}}
-    - --mongo-url={{ $global.Values.global.mongoUrl }}
-    - --db-type=mongodb
+    {{- if and $global.Values.global.fdbUrl (not $global.Values.fdbserver.enabled)}}
+    - --doclayer-url={{ $global.Values.global.mongoUrl }}
     {{- else if $global.Values.fdbserver.enabled}}
     - --doclayer-url=mongodb://{{ template "doclayer.fullname" $global }}:27016
-    - --db-type=fdb
-    {{- else }}
-    - --mongo-url={{ template "mongodb.fullname" $global }}
-    - --mongo-user=root
-    - --db-type=mongodb
     {{- end }}
     - {{ $repo.name }}
     - {{ $repo.url }}
@@ -81,13 +67,6 @@ spec:
       value: {{ $global.Values.sync.httpsProxy }}
     - name: NO_PROXY
       value: {{ $global.Values.sync.noProxy }}
-    {{- end }}
-    {{- if not $global.Values.fdbserver.enabled }}
-    - name: MONGO_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          key: mongodb-root-password
-          name: {{ template "mongodb.fullname" $global }}
     {{- end }}
     resources:
 {{ toYaml $global.Values.sync.resources | indent 6 }}

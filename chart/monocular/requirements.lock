@@ -1,9 +1,6 @@
 dependencies:
-- name: mongodb
-  repository: https://kubernetes-charts.storage.googleapis.com
-  version: 7.2.10
 - name: fdbdoclayer
   repository: file://./local-helm/fdbdoclayer/
   version: 0.1.0
-digest: sha256:1d62539fb9fab5c5d069d9d33e456ff46286c2d8630f05018683df180f8b31cd
-generated: "2019-12-03T08:55:49.128951283Z"
+digest: sha256:c1dcdf76a679ae27c984d2d4057a790f9bc6cc2082aa1eeb79043b5549b95c7c
+generated: "2019-12-04T12:33:06.591986993Z"
